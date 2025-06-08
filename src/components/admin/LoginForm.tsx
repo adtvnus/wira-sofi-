@@ -36,46 +36,22 @@ const LoginForm = () => {
     }
 
     try {
-      // Simple bypass for demo purposes
-      const validCredentials = [
-        { username: 'admin', password: 'admin' },
-        { username: 'admin', password: 'admin123' },
-        { username: 'demo', password: '123' },
-        { username: 'wira', password: 'wira123' },
-        { username: 'sofi', password: 'sofi123' }
-      ];
+      // Always use API login for proper authentication
+      console.log('🔐 Attempting API login for:', username.trim());
 
-      const isValidCredential = validCredentials.some(
-        cred => cred.username === username.trim() && cred.password === password
-      );
-
-      if (isValidCredential) {
-        // Store simple auth token
-        localStorage.setItem('auth-token', 'demo-token-' + Date.now());
-        localStorage.setItem('auth-user', JSON.stringify({
-          username: username.trim(),
-          fullName: username === 'admin' ? 'Super Admin' :
-                   username === 'wira' ? 'Wira Saputra' :
-                   username === 'sofi' ? 'Sofi Andriani' : 'Demo User',
-          role: username === 'admin' ? 'super_admin' : 'admin'
-        }));
-
-        // Redirect to admin dashboard
-        window.location.href = '/admin';
-        return;
-      }
-
-      // Try API login as fallback
       const result = await login(username.trim(), password);
 
       if (result.success) {
+        console.log('✅ Login successful, redirecting to admin dashboard');
         // Redirect to admin dashboard
         window.location.href = '/admin';
       } else {
-        setError(result.error || 'Invalid credentials. Try: admin/admin or demo/123');
+        console.log('❌ Login failed:', result.error);
+        setError(result.error || 'Invalid credentials. Please check username and password.');
       }
     } catch (error) {
-      setError('Login failed. Try: admin/admin or demo/123');
+      console.error('❌ Login error:', error);
+      setError('Login failed. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +115,7 @@ const LoginForm = () => {
                     onChange={(e) => setUsername(e.target.value)}
                     onKeyDown={handleKeyPress}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                    placeholder="Enter your username"
+                    placeholder="admin"
                     disabled={isLoading}
                     autoComplete="username"
                   />
@@ -162,7 +138,7 @@ const LoginForm = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleKeyPress}
                     className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                    placeholder="Enter your password"
+                    placeholder="admin"
                     disabled={isLoading}
                     autoComplete="current-password"
                   />
@@ -254,6 +230,9 @@ const LoginForm = () => {
               <div className="mt-3 text-center">
                 <p className="text-xs text-gray-500">
                   💡 Click any button above to auto-fill credentials
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  🔧 Backend: http://localhost:3001 | Frontend: http://localhost:5174
                 </p>
               </div>
             </div>

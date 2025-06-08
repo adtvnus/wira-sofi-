@@ -8,21 +8,65 @@ const InvitedManagement: React.FC = () => {
   
   const [formData, setFormData] = useState({
     eventTitle: invitedSettings.eventTitle,
-    eventDate: invitedSettings.eventDate,
     venueName: invitedSettings.venueName,
-    venueAddress: invitedSettings.venueAddress
+    venueAddress: invitedSettings.venueAddress,
+    // Wedding details
+    weddingDate: '',
+    weddingTime: '',
+    weddingVenue: '',
+    weddingAddress: '',
+    // Reception details
+    receptionDate: '',
+    receptionTime: '',
+    receptionVenue: '',
+    receptionAddress: ''
   });
 
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       eventTitle: invitedSettings.eventTitle,
-      eventDate: invitedSettings.eventDate,
       venueName: invitedSettings.venueName,
       venueAddress: invitedSettings.venueAddress
-    });
+    }));
   }, [invitedSettings]);
+
+  // Load existing wedding settings
+  useEffect(() => {
+    const loadWeddingSettings = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/wedding-settings/active', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            const settings = data.data;
+            setFormData(prev => ({
+              ...prev,
+              weddingDate: settings.wedding_date || '',
+              weddingTime: settings.wedding_time || '',
+              weddingVenue: settings.wedding_venue || '',
+              weddingAddress: settings.wedding_address || '',
+              receptionDate: settings.reception_date || '',
+              receptionTime: settings.reception_time || '',
+              receptionVenue: settings.reception_venue || '',
+              receptionAddress: settings.reception_address || ''
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading wedding settings:', error);
+      }
+    };
+
+    loadWeddingSettings();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -32,9 +76,43 @@ const InvitedManagement: React.FC = () => {
     }));
   };
 
-  const handleSave = () => {
-    updateInvitedSettings(formData);
-    setMessage('Pengaturan Invited berhasil disimpan!');
+  const handleSave = async () => {
+    try {
+      // Save invited settings
+      updateInvitedSettings({
+        eventTitle: formData.eventTitle,
+        venueName: formData.venueName,
+        venueAddress: formData.venueAddress
+      });
+
+      // Save wedding and reception details to backend
+      const response = await fetch('http://localhost:3001/api/wedding-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          weddingDate: formData.weddingDate,
+          weddingTime: formData.weddingTime,
+          weddingVenue: formData.weddingVenue,
+          weddingAddress: formData.weddingAddress,
+          receptionDate: formData.receptionDate,
+          receptionTime: formData.receptionTime,
+          receptionVenue: formData.receptionVenue,
+          receptionAddress: formData.receptionAddress
+        })
+      });
+
+      if (response.ok) {
+        setMessage('Pengaturan Invited dan detail acara berhasil disimpan!');
+      } else {
+        setMessage('Pengaturan Invited disimpan, tetapi ada error pada detail acara.');
+      }
+    } catch (error) {
+      setMessage('Pengaturan Invited disimpan, tetapi ada error pada detail acara.');
+    }
+
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -69,34 +147,153 @@ const InvitedManagement: React.FC = () => {
                 <h3 className="text-xl font-semibold text-amber-800">Event Information</h3>
               </div>
 
+              <div>
+                <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                  <i className="fas fa-heading mr-2"></i>
+                  Event Title
+                </label>
+                <input
+                  type="text"
+                  name="eventTitle"
+                  value={formData.eventTitle}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                  placeholder="Wedding Ceremony"
+                />
+              </div>
+            </div>
+
+            {/* Wedding Details */}
+            <div className="space-y-6">
+              <div className="flex items-center mb-4">
+                <i className="fas fa-rings-wedding text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Wedding Details</h3>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                    <i className="fas fa-heading mr-2"></i>
-                    Event Title
+                    <i className="fas fa-calendar mr-2"></i>
+                    Wedding Date
                   </label>
                   <input
-                    type="text"
-                    name="eventTitle"
-                    value={formData.eventTitle}
+                    type="date"
+                    name="weddingDate"
+                    value={formData.weddingDate}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                    placeholder="Wedding Ceremony"
                   />
                 </div>
 
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
                     <i className="fas fa-clock mr-2"></i>
-                    Date & Time
+                    Wedding Time
+                  </label>
+                  <input
+                    type="time"
+                    name="weddingTime"
+                    value={formData.weddingTime}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-building mr-2"></i>
+                    Wedding Venue
                   </label>
                   <input
                     type="text"
-                    name="eventDate"
-                    value={formData.eventDate}
+                    name="weddingVenue"
+                    value={formData.weddingVenue}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                    placeholder="Friday, September 26, 2025 - 12:00 PM"
+                    placeholder="Wedding venue name"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-location-dot mr-2"></i>
+                    Wedding Address
+                  </label>
+                  <textarea
+                    name="weddingAddress"
+                    value={formData.weddingAddress}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900 resize-none"
+                    placeholder="Wedding venue address..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Reception Details */}
+            <div className="space-y-6">
+              <div className="flex items-center mb-4">
+                <i className="fas fa-glass-cheers text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Reception Details</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-calendar mr-2"></i>
+                    Reception Date
+                  </label>
+                  <input
+                    type="date"
+                    name="receptionDate"
+                    value={formData.receptionDate}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-clock mr-2"></i>
+                    Reception Time
+                  </label>
+                  <input
+                    type="time"
+                    name="receptionTime"
+                    value={formData.receptionTime}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-building mr-2"></i>
+                    Reception Venue
+                  </label>
+                  <input
+                    type="text"
+                    name="receptionVenue"
+                    value={formData.receptionVenue}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="Reception venue name"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-location-dot mr-2"></i>
+                    Reception Address
+                  </label>
+                  <textarea
+                    name="receptionAddress"
+                    value={formData.receptionAddress}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900 resize-none"
+                    placeholder="Reception venue address..."
                   />
                 </div>
               </div>

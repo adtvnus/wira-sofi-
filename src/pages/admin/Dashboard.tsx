@@ -3,23 +3,38 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from "../../layouts/AdminLayout";
 import { useWedding } from "../../contexts/WeddingContext";
+import apiService from '../../services/apiService';
 
 const Dashboard = () => {
   const { weddingData } = useWedding();
   const [guestCount, setGuestCount] = useState(0);
 
   useEffect(() => {
-    // Load guest count from localStorage
-    const savedGuests = localStorage.getItem('wedding-guests');
-    if (savedGuests) {
-      try {
-        const guests = JSON.parse(savedGuests);
-        setGuestCount(guests.length);
-      } catch (error) {
-        console.error('Error loading guests:', error);
-      }
-    }
+    loadDashboardData();
   }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      // Load guest count from API
+      const guestsResult = await apiService.getGuests();
+      if (guestsResult.success && guestsResult.data.data) {
+        setGuestCount(guestsResult.data.data.length);
+      } else {
+        // Fallback to localStorage
+        const savedGuests = localStorage.getItem('wedding-guests');
+        if (savedGuests) {
+          try {
+            const guests = JSON.parse(savedGuests);
+            setGuestCount(guests.length);
+          } catch (error) {
+            console.error('Error loading guests:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    }
+  };
 
   // Calculate RSVP stats
   const rsvpStats = {

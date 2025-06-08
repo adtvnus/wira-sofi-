@@ -1,25 +1,119 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWedding } from "../../contexts/WeddingContext";
 
 const Invited = () => {
   const [isMapLoaded, setIsMapLoaded] = useState(true);
+  const [weddingSettings, setWeddingSettings] = useState<any>(null);
   const { weddingData } = useWedding();
   const { invitedSettings } = weddingData;
 
-  const venueDetails = {
-    name: invitedSettings.venueName,
-    address: invitedSettings.venueAddress,
-    date: invitedSettings.eventDate,
-    time: invitedSettings.eventTime,
-    event: invitedSettings.eventName
+  // Load wedding settings from database
+  useEffect(() => {
+    const loadWeddingSettings = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/wedding-settings/active');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            setWeddingSettings(data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading wedding settings:', error);
+      }
+    };
+
+    loadWeddingSettings();
+  }, []);
+
+  // Complete wedding details from database
+  const weddingDetails = weddingSettings ? {
+    // Wedding ceremony details
+    weddingDate: weddingSettings.wedding_date,
+    weddingTime: weddingSettings.wedding_time,
+    weddingVenue: weddingSettings.wedding_venue,
+    weddingAddress: weddingSettings.wedding_address,
+    // Reception details
+    receptionDate: weddingSettings.reception_date,
+    receptionTime: weddingSettings.reception_time,
+    receptionVenue: weddingSettings.reception_venue,
+    receptionAddress: weddingSettings.reception_address,
+  } : null;
+
+  // Complete invited settings with all parameters from admin
+  const completeInvitedSettings = {
+    // Header information
+    headerTitle: invitedSettings.headerTitle || "Wedding Invitation",
+    headerSubtitle: invitedSettings.headerSubtitle || "We invite you to celebrate our special day",
+
+    // Event information from InvitedManagement
+    eventTitle: invitedSettings.eventTitle || "Wedding Ceremony",
+    eventName: invitedSettings.eventName || "Wedding Ceremony",
+    eventDate: invitedSettings.eventDate || "",
+    eventTime: invitedSettings.eventTime || "",
+
+    // Venue information from InvitedManagement
+    venueName: invitedSettings.venueName || "",
+    venueAddress: invitedSettings.venueAddress || "",
+    googleMapsUrl: invitedSettings.googleMapsUrl || "",
+
+    // Save the date information
+    saveTheDateTitle: invitedSettings.saveTheDateTitle || "Save The Date",
+    saveTheDateMessage: invitedSettings.saveTheDateMessage || "We can't wait to celebrate with you!",
+
+    // Status
+    isEnabled: invitedSettings.isEnabled !== false
   };
 
-  const googleMapsUrl = invitedSettings.googleMapsUrl;
+  // Determine which venue details to use (prioritize database wedding details)
+  const venueDetails = {
+    name: weddingDetails?.weddingVenue || completeInvitedSettings.venueName,
+    address: weddingDetails?.weddingAddress || completeInvitedSettings.venueAddress,
+    event: completeInvitedSettings.eventTitle
+  };
+
+  const googleMapsUrl = completeInvitedSettings.googleMapsUrl;
 
   const handleDirections = () => {
-    const encodedAddress = encodeURIComponent(venueDetails.address);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`, '_blank');
+    if (googleMapsUrl) {
+      // Use provided Google Maps URL
+      window.open(googleMapsUrl, '_blank');
+    } else {
+      // Fallback to search by address
+      const address = weddingDetails?.weddingAddress || completeInvitedSettings.venueAddress;
+      if (address) {
+        const encodedAddress = encodeURIComponent(address);
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`, '_blank');
+      }
+    }
   };
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  // If invited page is disabled, show a message
+  if (!completeInvitedSettings.isEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-light mb-4" style={{ color: "#644F44" }}>
+            Invitation Page Temporarily Unavailable
+          </h2>
+          <p className="text-base opacity-70" style={{ color: "#644F44" }}>
+            Please check back later or contact the wedding organizer.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -87,14 +181,14 @@ const Invited = () => {
             className="text-4xl md:text-5xl font-light mb-6 tracking-wider"
             style={{ color: "#644F44" }}
           >
-            {invitedSettings.headerTitle}
+            {completeInvitedSettings.headerTitle}
           </h2>
 
           <p
             className="text-lg tracking-wide opacity-70 italic"
             style={{ color: "#644F44" }}
           >
-            "{invitedSettings.headerSubtitle}"
+            "{completeInvitedSettings.headerSubtitle}"
           </p>
         </div>
 
@@ -115,7 +209,7 @@ const Invited = () => {
                     className="text-3xl font-light mb-4 tracking-wide"
                     style={{ color: "#644F44" }}
                   >
-                    {invitedSettings.eventTitle}
+                    {completeInvitedSettings.eventTitle}
                   </h3>
                   <div className="flex items-center justify-center">
                     <div className="w-12 h-px bg-gradient-to-r from-amber-300 to-transparent"></div>
@@ -126,70 +220,165 @@ const Invited = () => {
 
                 {/* Event Details */}
                 <div className="space-y-8">
-                  {/* Date & Time */}
-                  <div className="flex items-start space-x-4">
-                    <div className="w-6 h-6 bg-gradient-to-br from-amber-300 to-orange-300 rounded-full flex-shrink-0 mt-1 shadow-lg"></div>
-                    <div>
-                      <h4 
-                        className="text-lg font-medium mb-2"
-                        style={{ color: "#644F44" }}
-                      >
-                        {venueDetails.event}
-                      </h4>
-                      <p 
-                        className="text-base opacity-80"
-                        style={{ color: "#644F44" }}
-                      >
-                        {venueDetails.date}
-                      </p>
-                      <p 
-                        className="text-xl font-medium mt-1"
-                        style={{ color: "#644F44" }}
-                      >
-                        {venueDetails.time}
-                      </p>
+                  {/* Wedding Ceremony */}
+                  {weddingDetails && weddingDetails.weddingDate && (
+                    <div className="flex items-start space-x-4">
+                      <div className="w-6 h-6 bg-gradient-to-br from-amber-300 to-orange-300 rounded-full flex-shrink-0 mt-1 shadow-lg"></div>
+                      <div>
+                        <h4
+                          className="text-lg font-medium mb-2"
+                          style={{ color: "#644F44" }}
+                        >
+                          Wedding Ceremony
+                        </h4>
+                        <p
+                          className="text-base opacity-80"
+                          style={{ color: "#644F44" }}
+                        >
+                          {formatDate(weddingDetails.weddingDate)}
+                        </p>
+                        {weddingDetails.weddingTime && (
+                          <p
+                            className="text-xl font-medium mt-1"
+                            style={{ color: "#644F44" }}
+                          >
+                            {weddingDetails.weddingTime} WIB
+                          </p>
+                        )}
+                        {weddingDetails.weddingVenue && (
+                          <div className="mt-3">
+                            <p
+                              className="text-base font-medium mb-1"
+                              style={{ color: "#644F44" }}
+                            >
+                              {weddingDetails.weddingVenue}
+                            </p>
+                            {weddingDetails.weddingAddress && (
+                              <p
+                                className="text-sm opacity-70 leading-relaxed"
+                                style={{ color: "#644F44" }}
+                              >
+                                {weddingDetails.weddingAddress}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Venue */}
-                  <div className="flex items-start space-x-4">
-                    <div className="w-6 h-6 bg-gradient-to-br from-orange-300 to-amber-300 rounded-full flex-shrink-0 mt-1 shadow-lg"></div>
-                    <div>
-                      <h4 
-                        className="text-lg font-medium mb-2"
-                        style={{ color: "#644F44" }}
-                      >
-                        Venue
-                      </h4>
-                      <p 
-                        className="text-base font-medium mb-2"
-                        style={{ color: "#644F44" }}
-                      >
-                        {venueDetails.name}
-                      </p>
-                      <p 
-                        className="text-sm opacity-70 leading-relaxed"
-                        style={{ color: "#644F44" }}
-                      >
-                        {venueDetails.address}
-                      </p>
+                  {/* Reception */}
+                  {weddingDetails && weddingDetails.receptionDate && (
+                    <div className="flex items-start space-x-4">
+                      <div className="w-6 h-6 bg-gradient-to-br from-rose-300 to-pink-300 rounded-full flex-shrink-0 mt-1 shadow-lg"></div>
+                      <div>
+                        <h4
+                          className="text-lg font-medium mb-2"
+                          style={{ color: "#644F44" }}
+                        >
+                          Reception
+                        </h4>
+                        <p
+                          className="text-base opacity-80"
+                          style={{ color: "#644F44" }}
+                        >
+                          {formatDate(weddingDetails.receptionDate)}
+                        </p>
+                        {weddingDetails.receptionTime && (
+                          <p
+                            className="text-xl font-medium mt-1"
+                            style={{ color: "#644F44" }}
+                          >
+                            {weddingDetails.receptionTime} WIB
+                          </p>
+                        )}
+                        {weddingDetails.receptionVenue && (
+                          <div className="mt-3">
+                            <p
+                              className="text-base font-medium mb-1"
+                              style={{ color: "#644F44" }}
+                            >
+                              {weddingDetails.receptionVenue}
+                            </p>
+                            {weddingDetails.receptionAddress && (
+                              <p
+                                className="text-sm opacity-70 leading-relaxed"
+                                style={{ color: "#644F44" }}
+                              >
+                                {weddingDetails.receptionAddress}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* General Event (fallback when no specific wedding/reception details) */}
+                  {(!weddingDetails || (!weddingDetails.weddingDate && !weddingDetails.receptionDate)) && (
+                    <div className="flex items-start space-x-4">
+                      <div className="w-6 h-6 bg-gradient-to-br from-orange-300 to-amber-300 rounded-full flex-shrink-0 mt-1 shadow-lg"></div>
+                      <div>
+                        <h4
+                          className="text-lg font-medium mb-2"
+                          style={{ color: "#644F44" }}
+                        >
+                          {completeInvitedSettings.eventName || completeInvitedSettings.eventTitle}
+                        </h4>
+                        {completeInvitedSettings.eventDate && (
+                          <p
+                            className="text-base opacity-80"
+                            style={{ color: "#644F44" }}
+                          >
+                            {formatDate(completeInvitedSettings.eventDate)}
+                          </p>
+                        )}
+                        {completeInvitedSettings.eventTime && (
+                          <p
+                            className="text-xl font-medium mt-1"
+                            style={{ color: "#644F44" }}
+                          >
+                            {completeInvitedSettings.eventTime} WIB
+                          </p>
+                        )}
+                        {venueDetails.name && (
+                          <div className="mt-3">
+                            <p
+                              className="text-base font-medium mb-1"
+                              style={{ color: "#644F44" }}
+                            >
+                              {venueDetails.name}
+                            </p>
+                            {venueDetails.address && (
+                              <p
+                                className="text-sm opacity-70 leading-relaxed"
+                                style={{ color: "#644F44" }}
+                              >
+                                {venueDetails.address}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Directions Button */}
-                <div className="mt-10 text-center">
-                  <button
-                    onClick={handleDirections}
-                    className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-amber-300 to-orange-300 hover:from-amber-400 hover:to-orange-400 text-white font-medium rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                    style={{ color: "#644F44" }}
-                  >
-                    <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                    </svg>
-                    Get Directions
-                  </button>
-                </div>
+                {(venueDetails.address || googleMapsUrl) && (
+                  <div className="mt-10 text-center">
+                    <button
+                      onClick={handleDirections}
+                      className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-amber-300 to-orange-300 hover:from-amber-400 hover:to-orange-400 text-white font-medium rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                      style={{ color: "#644F44" }}
+                    >
+                      <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-5.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                      Get Directions
+                    </button>
+                  </div>
+                )}
               </div>
               
               {/* Card decorative elements */}
@@ -210,7 +399,7 @@ const Invited = () => {
               <div className="relative overflow-hidden rounded-2xl shadow-2xl">
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-100/10 via-transparent to-orange-100/10 z-10 rounded-2xl"></div>
                 
-                {isMapLoaded ? (
+                {isMapLoaded && googleMapsUrl ? (
                   <iframe
                     src={googleMapsUrl}
                     width="100%"
@@ -234,16 +423,18 @@ const Invited = () => {
                       <h4 className="text-lg font-medium mb-2" style={{ color: "#644F44" }}>
                         Wedding Venue
                       </h4>
-                      <p className="text-sm opacity-70" style={{ color: "#644F44" }}>
-                        {venueDetails.name}
+                      <p className="text-sm opacity-70 mb-4" style={{ color: "#644F44" }}>
+                        {venueDetails.name || "Venue information not available"}
                       </p>
-                      <button
-                        onClick={handleDirections}
-                        className="mt-4 px-6 py-2 bg-gradient-to-r from-amber-300 to-orange-300 text-white rounded-full text-sm font-medium hover:shadow-lg transition-all duration-300"
-                        style={{ color: "#644F44" }}
-                      >
-                        Open in Google Maps
-                      </button>
+                      {(venueDetails.address || googleMapsUrl) && (
+                        <button
+                          onClick={handleDirections}
+                          className="px-6 py-2 bg-gradient-to-r from-amber-300 to-orange-300 text-white rounded-full text-sm font-medium hover:shadow-lg transition-all duration-300"
+                          style={{ color: "#644F44" }}
+                        >
+                          Open in Google Maps
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -260,7 +451,7 @@ const Invited = () => {
           </div>
         </div>
 
-        {/* Bottom Section */}
+        {/* Bottom Section - Save The Date */}
         <div className="text-center animate-fade-in-up">
           <div className="relative inline-block">
             <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-2xl"></div>
@@ -269,19 +460,27 @@ const Invited = () => {
                 className="text-2xl font-light mb-4"
                 style={{ color: "#644F44" }}
               >
-                {invitedSettings.saveTheDateTitle}
+                {completeInvitedSettings.saveTheDateTitle}
               </h3>
               <p
                 className="text-lg font-medium mb-2"
                 style={{ color: "#644F44" }}
               >
-                {venueDetails.date}
+                {/* Priority: Wedding date > Reception date > Event date */}
+                {weddingDetails && weddingDetails.weddingDate ?
+                  formatDate(weddingDetails.weddingDate) :
+                  weddingDetails && weddingDetails.receptionDate ?
+                    formatDate(weddingDetails.receptionDate) :
+                    completeInvitedSettings.eventDate ?
+                      formatDate(completeInvitedSettings.eventDate) :
+                      'Save The Date'
+                }
               </p>
               <p
                 className="text-base opacity-70"
                 style={{ color: "#644F44" }}
               >
-                {invitedSettings.saveTheDateMessage}
+                {completeInvitedSettings.saveTheDateMessage}
               </p>
               
               <div className="mt-6 flex items-center justify-center space-x-3">
@@ -345,7 +544,7 @@ const Invited = () => {
         
         @keyframes float-slower {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-10px) rotate(2deg); }
+          50% { transform: translateY(-10px) rotate(-10px); }
         }
         
         .animate-fade-in {

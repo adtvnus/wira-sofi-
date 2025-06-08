@@ -5,6 +5,55 @@ interface StorageWarningProps {
   onBackupCreated?: () => void;
 }
 
+// Helper function to get all storage data
+const getAllStorageData = async () => {
+  const data: Record<string, any> = {};
+  const info = storageManager.getStorageInfo();
+
+  try {
+    switch (info.storageType) {
+      case 'localStorage':
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key) {
+            try {
+              data[key] = JSON.parse(localStorage.getItem(key) || '');
+            } catch {
+              data[key] = localStorage.getItem(key);
+            }
+          }
+        }
+        break;
+      case 'sessionStorage':
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key) {
+            try {
+              data[key] = JSON.parse(sessionStorage.getItem(key) || '');
+            } catch {
+              data[key] = sessionStorage.getItem(key);
+            }
+          }
+        }
+        break;
+      case 'memory':
+        // For memory storage, we can't access the private memoryStorage directly
+        // So we'll just return a message
+        data['note'] = 'Memory storage data cannot be backed up';
+        break;
+    }
+  } catch (error) {
+    data['error'] = `Failed to read storage: ${(error as Error).message}`;
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    storageType: info.storageType,
+    isPrivateMode: info.isPrivateMode,
+    data
+  };
+};
+
 const StorageWarning: React.FC<StorageWarningProps> = ({ onBackupCreated }) => {
   const [storageInfo, setStorageInfo] = useState<{
     quota: StorageQuota | null;
@@ -35,14 +84,15 @@ const StorageWarning: React.FC<StorageWarningProps> = ({ onBackupCreated }) => {
       const quota = await storageManager.getStorageQuota();
       const info = storageManager.getStorageInfo();
       
-      const showWarning = 
-        info.isPrivateMode || 
+      const showWarning = Boolean(
+        info.isPrivateMode ||
         info.storageType !== 'localStorage' ||
-        (quota && quota.percentage > 80);
+        (quota && quota.percentage > 80)
+      );
 
       setStorageInfo({
         quota,
-        isPrivateMode: info.isPrivateMode || false,
+        isPrivateMode: Boolean(info.isPrivateMode),
         storageType: info.storageType,
         showWarning
       });
@@ -57,7 +107,7 @@ const StorageWarning: React.FC<StorageWarningProps> = ({ onBackupCreated }) => {
 
     try {
       // Simple backup by downloading current data
-      const allData = await storageManager.getAllData();
+      const allData = await getAllStorageData();
       const dataStr = JSON.stringify(allData, null, 2);
       const blob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

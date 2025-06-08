@@ -14,7 +14,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: 'fas fa-chart-pie' },
-    { name: 'Wedding Settings', href: '/admin/wedding-settings', icon: 'fas fa-heart' },
+    { name: 'Settings List', href: '/admin/wedding-settings-list', icon: 'fas fa-list-alt' },
     { name: 'Guest Management', href: '/admin/guest-management', icon: 'fas fa-users' },
     { name: 'Invited Page', href: '/admin/invited-management', icon: 'fas fa-envelope-open-text' },
     { name: 'RSVP Management', href: '/admin/rsvp-management', icon: 'fas fa-clipboard-check' },

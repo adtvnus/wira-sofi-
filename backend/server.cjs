@@ -25,8 +25,25 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`📡 ${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Body logging middleware (after body parsing)
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('   Body:', JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 app.use('/uploads', express.static('uploads'));
 
 // Create uploads directory if it doesn't exist
@@ -45,18 +62,51 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     } else {
       cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// Specific multer configuration for quotes images
+const quotesStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const quotesPath = path.join(__dirname, '../public/images/quotes');
+    if (!fs.existsSync(quotesPath)) {
+      fs.mkdirSync(quotesPath, { recursive: true });
+    }
+    cb(null, quotesPath);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    const filename = `quote-${timestamp}${extension}`;
+    cb(null, filename);
+  }
+});
+
+const quotesUpload = multer({
+  storage: quotesStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for quotes
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (JPG, PNG, GIF, WebP)'));
     }
   }
 });
@@ -119,17 +169,16 @@ const logActivity = async (userId, action, tableName, recordId, oldValues = null
   try {
     const connection = await getConnection();
     await connection.query(`
-      INSERT INTO activity_logs (user_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activity_logs (user_id, action_type, table_name, record_id, ip_address, user_agent, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [
       userId,
       action,
       tableName,
       recordId,
-      oldValues ? JSON.stringify(oldValues) : null,
-      newValues ? JSON.stringify(newValues) : null,
-      req.ip,
-      req.get('User-Agent')
+      req?.ip || req?.connection?.remoteAddress || 'unknown',
+      req?.get('User-Agent') || null,
+      `${action} ${tableName} record ${recordId}`
     ]);
     await connection.end();
   } catch (error) {
@@ -139,41 +188,58 @@ const logActivity = async (userId, action, tableName, recordId, oldValues = null
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  console.log('🏥 Health check requested');
+  res.json({
+    status: 'OK',
     message: 'Wedding Invitation API Server with Authentication',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    server: 'http://localhost:3001',
+    endpoints: {
+      login: '/api/auth/login',
+      settings: '/api/wedding-settings',
+      dashboard: '/api/dashboard/stats'
+    }
   });
 });
 
 // Authentication endpoints
 app.post('/api/auth/login', async (req, res) => {
   try {
+    console.log('🔐 Login attempt:', req.body);
     const { username, password } = req.body;
 
     if (!username || !password) {
+      console.log('❌ Missing username or password');
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
+    console.log('🔌 Connecting to database...');
     const connection = await getConnection();
-    
+
     // Get user
+    console.log('👤 Looking for user:', username);
     const [users] = await connection.query(`
       SELECT id, username, email, password_hash, full_name, role, is_active
-      FROM admin_users 
+      FROM admin_users
       WHERE (username = ? OR email = ?) AND is_active = TRUE
     `, [username, username]);
 
+    console.log('📊 Found users:', users.length);
     if (users.length === 0) {
+      console.log('❌ User not found');
       await connection.end();
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = users[0];
+    console.log('✅ User found:', user.username);
 
     // Verify password
+    console.log('🔐 Verifying password...');
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    console.log('🔐 Password valid:', isValidPassword);
     if (!isValidPassword) {
+      console.log('❌ Invalid password');
       await connection.end();
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -249,13 +315,13 @@ app.get('/api/wedding-settings', authenticateToken, async (req, res) => {
   try {
     const connection = await getConnection();
     const [rows] = await connection.query(`
-      SELECT * FROM wedding_settings 
-      WHERE is_active = TRUE 
-      ORDER BY created_at DESC 
+      SELECT * FROM wedding_settings
+      WHERE is_active = TRUE
+      ORDER BY created_at DESC
       LIMIT 1
     `);
     await connection.end();
-    
+
     res.json({ success: true, data: rows[0] || {} });
   } catch (error) {
     console.error('Error fetching wedding settings:', error);
@@ -263,10 +329,111 @@ app.get('/api/wedding-settings', authenticateToken, async (req, res) => {
   }
 });
 
+// Get all wedding settings for CRUD table
+app.get('/api/wedding-settings/all', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+    const [rows] = await connection.query(`
+      SELECT ws.*, au.full_name as created_by_name
+      FROM wedding_settings ws
+      LEFT JOIN admin_users au ON ws.created_by = au.id
+      ORDER BY ws.created_at DESC
+    `);
+    await connection.end();
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Error fetching all wedding settings:', error);
+    res.status(500).json({ error: 'Failed to fetch wedding settings list' });
+  }
+});
+
+// Set active wedding setting
+app.put('/api/wedding-settings/:id/activate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await getConnection();
+
+    // Deactivate all settings
+    await connection.query('UPDATE wedding_settings SET is_active = FALSE');
+
+    // Activate selected setting
+    const [result] = await connection.query(`
+      UPDATE wedding_settings SET is_active = TRUE WHERE id = ?
+    `, [id]);
+
+    if (result.affectedRows === 0) {
+      await connection.end();
+      return res.status(404).json({ error: 'Wedding setting not found' });
+    }
+
+    await connection.end();
+
+    // Log activity
+    await logActivity(req.user.id, 'ACTIVATE', 'wedding_settings', id, null, null, req);
+
+    res.json({ success: true, message: 'Wedding setting activated successfully' });
+  } catch (error) {
+    console.error('Error activating wedding setting:', error);
+    res.status(500).json({ error: 'Failed to activate wedding setting' });
+  }
+});
+
+// Delete wedding setting
+app.delete('/api/wedding-settings/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await getConnection();
+
+    // Check if this is the active setting
+    const [activeCheck] = await connection.query(`
+      SELECT is_active FROM wedding_settings WHERE id = ?
+    `, [id]);
+
+    if (activeCheck.length === 0) {
+      await connection.end();
+      return res.status(404).json({ error: 'Wedding setting not found' });
+    }
+
+    if (activeCheck[0].is_active) {
+      await connection.end();
+      return res.status(400).json({ error: 'Cannot delete active wedding setting' });
+    }
+
+    // Delete the setting
+    await connection.query('DELETE FROM wedding_settings WHERE id = ?', [id]);
+    await connection.end();
+
+    // Log activity
+    await logActivity(req.user.id, 'DELETE', 'wedding_settings', id, null, null, req);
+
+    res.json({ success: true, message: 'Wedding setting deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting wedding setting:', error);
+    res.status(500).json({ error: 'Failed to delete wedding setting' });
+  }
+});
+
 app.post('/api/wedding-settings', authenticateToken, async (req, res) => {
   try {
     const settingsData = req.body;
-    
+
+    // Validate required fields
+    const requiredFields = [
+      'weddingDate', 'weddingTime', 'weddingVenue', 'weddingAddress'
+    ];
+
+    const missingFields = requiredFields.filter(field =>
+      !settingsData[field] || settingsData[field].toString().trim() === ''
+    );
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        error: `Required fields missing: ${missingFields.join(', ')}`,
+        missingFields: missingFields
+      });
+    }
+
     const connection = await getConnection();
     
     // Get current settings for logging
@@ -280,19 +447,11 @@ app.post('/api/wedding-settings', authenticateToken, async (req, res) => {
     // Insert new settings
     const [result] = await connection.query(`
       INSERT INTO wedding_settings (
-        groom_full_name, groom_first_name, groom_parents,
-        bride_full_name, bride_first_name, bride_parents,
         wedding_date, wedding_time, wedding_venue, wedding_address,
         reception_date, reception_time, reception_venue, reception_address,
         created_by, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
     `, [
-      settingsData.groomFullName,
-      settingsData.groomFirstName,
-      settingsData.groomParents,
-      settingsData.brideFullName,
-      settingsData.brideFirstName,
-      settingsData.brideParents,
       settingsData.weddingDate,
       settingsData.weddingTime,
       settingsData.weddingVenue,
@@ -528,6 +687,178 @@ app.get('/api/rsvp', authenticateToken, async (req, res) => {
   }
 });
 
+// Wedding Quotes endpoints
+app.get('/api/quotes', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+    const [rows] = await connection.query(`
+      SELECT q.*, w.groom_first_name, w.bride_first_name
+      FROM wedding_quotes q
+      JOIN wedding_settings w ON q.wedding_id = w.id
+      WHERE q.is_active = TRUE AND w.is_active = TRUE
+      ORDER BY q.display_order ASC, q.created_at DESC
+    `);
+    await connection.end();
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    res.status(500).json({ error: 'Failed to fetch quotes' });
+  }
+});
+
+app.post('/api/quotes', authenticateToken, async (req, res) => {
+  try {
+    const { quoteText, quoteAuthor, quoteCategory, displayOrder, quoteImage } = req.body;
+
+    if (!quoteText) {
+      return res.status(400).json({ error: 'Quote text is required' });
+    }
+
+    const connection = await getConnection();
+
+    // Get active wedding ID
+    const [weddings] = await connection.query('SELECT id FROM wedding_settings WHERE is_active = TRUE LIMIT 1');
+    let weddingId = 1;
+
+    if (weddings.length > 0) {
+      weddingId = weddings[0].id;
+    }
+
+    const [result] = await connection.query(`
+      INSERT INTO wedding_quotes (
+        wedding_id, quote_text, quote_author, quote_category,
+        quote_image_url, display_order, created_by, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+    `, [weddingId, quoteText, quoteAuthor || null, quoteCategory || 'general', quoteImage || null, displayOrder || 0, req.user.id]);
+
+    // Get the inserted quote
+    const [newQuote] = await connection.query(`
+      SELECT * FROM wedding_quotes WHERE id = ?
+    `, [result.insertId]);
+
+    await connection.end();
+
+    // Log activity
+    await logActivity(req.user.id, 'CREATE', 'wedding_quotes', result.insertId, null, newQuote[0], req);
+
+    res.status(201).json({ success: true, data: newQuote[0] });
+  } catch (error) {
+    console.error('Error adding quote:', error);
+    res.status(500).json({ error: 'Failed to add quote' });
+  }
+});
+
+app.put('/api/quotes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quoteText, quoteAuthor, quoteCategory, displayOrder, quoteImage, isActive } = req.body;
+
+    const connection = await getConnection();
+
+    // Get current quote data for logging
+    const [currentQuote] = await connection.query(`
+      SELECT * FROM wedding_quotes WHERE id = ? AND is_active = TRUE
+    `, [id]);
+
+    if (currentQuote.length === 0) {
+      await connection.end();
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    await connection.query(`
+      UPDATE wedding_quotes
+      SET quote_text = ?, quote_author = ?, quote_category = ?,
+          quote_image_url = ?, display_order = ?, is_active = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [quoteText, quoteAuthor, quoteCategory, quoteImage, displayOrder, isActive, id]);
+
+    // Get updated quote
+    const [updatedQuote] = await connection.query(`
+      SELECT * FROM wedding_quotes WHERE id = ?
+    `, [id]);
+
+    await connection.end();
+
+    // Log activity
+    await logActivity(req.user.id, 'UPDATE', 'wedding_quotes', id, currentQuote[0], updatedQuote[0], req);
+
+    res.json({ success: true, data: updatedQuote[0] });
+  } catch (error) {
+    console.error('Error updating quote:', error);
+    res.status(500).json({ error: 'Failed to update quote' });
+  }
+});
+
+app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const connection = await getConnection();
+
+    // Get current quote data for logging
+    const [currentQuote] = await connection.query(`
+      SELECT * FROM wedding_quotes WHERE id = ? AND is_active = TRUE
+    `, [id]);
+
+    if (currentQuote.length === 0) {
+      await connection.end();
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    // Soft delete
+    await connection.query(`
+      UPDATE wedding_quotes
+      SET is_active = FALSE, updated_at = NOW()
+      WHERE id = ?
+    `, [id]);
+
+    await connection.end();
+
+    // Log activity
+    await logActivity(req.user.id, 'DELETE', 'wedding_quotes', id, currentQuote[0], null, req);
+
+    res.json({ success: true, message: 'Quote deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting quote:', error);
+    res.status(500).json({ error: 'Failed to delete quote' });
+  }
+});
+
+// Quotes Image Upload endpoint
+app.post('/api/quotes/upload-image', authenticateToken, quotesUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    // Generate the public URL for the uploaded image
+    const imageUrl = `/images/quotes/${req.file.filename}`;
+
+    console.log('📁 Quote image uploaded:', {
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      size: req.file.size,
+      path: req.file.path,
+      url: imageUrl
+    });
+
+    // Log activity
+    await logActivity(req.user.id, 'CREATE', 'quote_image_upload', null, null, { filename: req.file.filename, url: imageUrl }, req);
+
+    res.json({
+      success: true,
+      url: imageUrl,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size
+    });
+  } catch (error) {
+    console.error('Error uploading quote image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
 // Dashboard statistics
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   try {
@@ -579,5 +910,5 @@ app.listen(PORT, () => {
   console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard/stats`);
   console.log('\n🔐 Default Admin Credentials:');
   console.log('   Username: admin');
-  console.log('   Password: admin123');
+  console.log('   Password: admin');
 });

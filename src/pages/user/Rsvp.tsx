@@ -257,7 +257,7 @@ const Rsvp = () => {
                       required
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm focus:ring-2 focus:ring-amber-300 focus:border-transparent transition-all duration-300"
                       style={{ color: "#644F44" }}
-                      placeholder="Masukkan nama lengkap Anda"
+                      placeholder="Ahmad Budi Santoso"
                     />
                   </div>
                   
@@ -273,7 +273,7 @@ const Rsvp = () => {
                       required
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm focus:ring-2 focus:ring-amber-300 focus:border-transparent transition-all duration-300"
                       style={{ color: "#644F44" }}
-                      placeholder="nama@email.com"
+                      placeholder="ahmad.budi@email.com"
                     />
                   </div>
                 </div>
@@ -433,7 +433,7 @@ const Rsvp = () => {
                     rows={4}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm focus:ring-2 focus:ring-amber-300 focus:border-transparent transition-all duration-300 resize-none"
                     style={{ color: "#644F44" }}
-                    placeholder="Tulis pesan dan doa terbaik untuk kedua mempelai..."
+                    placeholder="Selamat untuk Wira & Sofi! Semoga pernikahan kalian diberkahi kebahagiaan..."
                   />
                 </div>
 

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; }
+        #results { margin-top: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Direct Login Test</h1>
+    
+    <div class="test-section">
+        <h3>Manual Login Test</h3>
+        <div>
+            <input type="text" id="username" placeholder="Username" value="admin">
+            <input type="password" id="password" placeholder="Password" value="admin">
+            <button onclick="testLogin()">Test Login</button>
+        </div>
+        <div>
+            <button onclick="testHealth()">Test Health</button>
+            <button onclick="testAllCredentials()">Test All Credentials</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        const resultsDiv = document.getElementById('results');
+
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            resultsDiv.appendChild(div);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+
+        async function testHealth() {
+            addResult('🏥 Testing API Health...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                addResult(`Health Response Status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const data = await response.json();
+                addResult(`Health Response: ${JSON.stringify(data)}`, response.ok ? 'success' : 'error');
+                
+            } catch (error) {
+                addResult(`❌ Health Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            addResult(`🔐 Testing Login: ${username}/${password}`, 'info');
+            
+            try {
+                const requestBody = JSON.stringify({ username, password });
+                addResult(`Request Body: ${requestBody}`, 'info');
+                
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors',
+                    body: requestBody
+                });
+
+                addResult(`Login Response Status: ${response.status}`, 'info');
+                addResult(`Login Response Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`, 'info');
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    addResult(`✅ Login Success!`, 'success');
+                    addResult(`Token: ${data.token?.substring(0, 30)}...`, 'success');
+                    addResult(`User: ${data.user?.fullName} (${data.user?.role})`, 'success');
+                    
+                    // Store token for testing
+                    localStorage.setItem('auth-token', data.token);
+                    addResult(`Token stored in localStorage`, 'success');
+                    
+                } else {
+                    addResult(`❌ Login Failed: ${JSON.stringify(data)}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Login Error: ${error.message}`, 'error');
+                addResult(`Error Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        async function testAllCredentials() {
+            const credentials = [
+                { username: 'admin', password: 'admin' },
+                { username: 'wira', password: 'wira123' },
+                { username: 'sofi', password: 'sofi123' },
+                { username: 'demo', password: '123' }
+            ];
+
+            addResult('🔄 Testing all credentials...', 'info');
+
+            for (const cred of credentials) {
+                try {
+                    const response = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        mode: 'cors',
+                        body: JSON.stringify(cred)
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        addResult(`✅ ${cred.username}/${cred.password}: SUCCESS - ${data.user?.fullName}`, 'success');
+                        localStorage.setItem('auth-token', data.token);
+                        break;
+                    } else {
+                        addResult(`❌ ${cred.username}/${cred.password}: FAILED - ${data.error || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    addResult(`❌ ${cred.username}/${cred.password}: ERROR - ${error.message}`, 'error');
+                }
+                
+                // Small delay between requests
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            addResult('🚀 Direct Login Test loaded', 'info');
+            addResult('Backend: http://localhost:3001', 'info');
+            addResult('Frontend: http://localhost:5174', 'info');
+            
+            // Test health first
+            setTimeout(testHealth, 1000);
+        };
+    </script>
+</body>
+</html>

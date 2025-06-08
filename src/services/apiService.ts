@@ -1,24 +1,41 @@
 // Simple API Service for MySQL Integration
 class ApiService {
   private baseUrl: string;
+  private getToken: (() => string | null) | null = null;
 
   constructor(baseUrl: string = 'http://localhost:3001/api') {
     this.baseUrl = baseUrl;
   }
 
-  // Helper method for API calls
+  // Set token getter function
+  setTokenGetter(getToken: () => string | null) {
+    this.getToken = getToken;
+  }
+
+  // Helper method for API calls with authentication
   private async apiCall(endpoint: string, options: RequestInit = {}) {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+
+      // Add Authorization header if token is available
+      if (this.getToken) {
+        const token = this.getToken();
+        if (token && !token.startsWith('demo-token-')) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
         ...options,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${JSON.stringify(errorData)}`);
       }
 
       return await response.json();
@@ -117,11 +134,42 @@ class ApiService {
     }
   }
 
+  async getAllWeddingSettings() {
+    try {
+      const data = await this.apiCall('/wedding-settings/all');
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
   async updateWeddingSettings(settingsData: any) {
     try {
       const data = await this.apiCall('/wedding-settings', {
         method: 'POST',
         body: JSON.stringify(settingsData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async activateWeddingSetting(id: number) {
+    try {
+      const data = await this.apiCall(`/wedding-settings/${id}/activate`, {
+        method: 'PUT',
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async deleteWeddingSetting(id: number) {
+    try {
+      const data = await this.apiCall(`/wedding-settings/${id}`, {
+        method: 'DELETE',
       });
       return { success: true, data };
     } catch (error) {
@@ -140,4 +188,8 @@ class ApiService {
   }
 }
 
-export default ApiService;
+// Create singleton instance
+const apiService = new ApiService();
+
+export default apiService;
+export { ApiService };

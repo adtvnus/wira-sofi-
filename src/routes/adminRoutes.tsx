@@ -2,7 +2,8 @@
 import Dashboard from "../pages/admin/Dashboard";
 import Login from "../pages/admin/Login";
 import AdminLanding from "../pages/AdminLanding";
-import WeddingSettings from "../pages/admin/WeddingSettings";
+
+import WeddingSettingsList from "../pages/admin/WeddingSettingsList";
 import GuestManagement from "../pages/admin/GuestManagement";
 import QuotesManagement from "../pages/admin/QuotesManagement";
 import BrideGroomManagement from "../pages/admin/BrideGroomManagement";
@@ -18,7 +19,8 @@ const adminRoutes = [
   { path: "/admin/login", component: Login },
   { path: "/admin", component: withAuth(Dashboard) },
   { path: "/admin/dashboard", component: withAuth(Dashboard) },
-  { path: "/admin/wedding-settings", component: withAuth(WeddingSettings) },
+
+  { path: "/admin/wedding-settings-list", component: withAuth(WeddingSettingsList) },
   { path: "/admin/guest-management", component: withAuth(GuestManagement) },
   { path: "/admin/quotes-management", component: withAuth(QuotesManagement) },
   { path: "/admin/bride-groom-management", component: withAuth(BrideGroomManagement) },

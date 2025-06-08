@@ -97,42 +97,6 @@ const GuestManagement = () => {
     };
   };
 
-  const formatGuestFromLocalStorage = (localGuest: any): Guest => {
-    // Handle old format data from localStorage
-    if (localGuest.invitationLink && !localGuest.invitationLinks) {
-      return {
-        ...localGuest,
-        email: localGuest.email || undefined,
-        phone: localGuest.phone || undefined,
-        guestCount: localGuest.guestCount || 1,
-        rsvpStatus: localGuest.rsvpStatus || 'pending',
-        invitationCode: localGuest.invitationCode || generateInvitationCode(),
-        invitationLinks: generateInvitationLinks(localGuest.name)
-      };
-    }
-
-    // Handle new format or ensure all fields exist
-    const links = localGuest.invitationLinks || generateInvitationLinks(localGuest.name);
-
-    // Ensure intro link exists (for backward compatibility)
-    if (!links.intro) {
-      links.intro = `${window.location.origin}${generateGuestUrl(localGuest.name, '/intro')}`;
-    }
-
-    return {
-      id: localGuest.id,
-      name: localGuest.name,
-      email: localGuest.email,
-      phone: localGuest.phone,
-      guestCount: localGuest.guestCount || 1,
-      rsvpStatus: localGuest.rsvpStatus || 'pending',
-      invitationCode: localGuest.invitationCode || generateInvitationCode(),
-      invitationLinks: links,
-      createdAt: localGuest.createdAt,
-      updatedAt: localGuest.updatedAt
-    };
-  };
-
   const generateInvitationLinks = (guestName: string) => {
     const baseUrl = window.location.origin;
     return {
@@ -141,11 +105,6 @@ const GuestManagement = () => {
       rsvp: `${baseUrl}${generateGuestUrl(guestName, '/rsvp')}`,
       thanks: `${baseUrl}${generateGuestUrl(guestName, '/thanks')}`
     };
-  };
-
-  const saveGuests = (updatedGuests: Guest[]) => {
-    localStorage.setItem('wedding-guests', JSON.stringify(updatedGuests));
-    setGuests(updatedGuests);
   };
 
   const addGuest = async () => {
@@ -198,8 +157,6 @@ const GuestManagement = () => {
       setIsAdding(false);
     }
   };
-
-
 
   const deleteGuest = async (guestId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus tamu ini?')) {
@@ -350,7 +307,7 @@ const GuestManagement = () => {
                   type="text"
                   value={newGuestName}
                   onChange={(e) => setNewGuestName(e.target.value)}
-                  placeholder="Nama lengkap tamu"
+                  placeholder="Ahmad Budi Santoso"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onKeyDown={(e) => e.key === 'Enter' && addGuest()}
                 />
@@ -363,7 +320,7 @@ const GuestManagement = () => {
                   type="email"
                   value={newGuestEmail}
                   onChange={(e) => setNewGuestEmail(e.target.value)}
-                  placeholder="email@example.com"
+                  placeholder="ahmad.budi@email.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

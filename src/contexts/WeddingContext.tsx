@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { WeddingSettings, WeddingCouple, WeddingEvent, QuotesSettings, BrideGroomPageSettings, StoryPageSettings, GalleryPageSettings, RsvpSettings, ThanksSettings, InvitedSettings } from '../types/wedding';
 import { storageManager } from '../utils/storageManager';
-import ApiService from '../services/apiService';
+import apiService from '../services/apiService';
 
 interface WeddingContextType {
   weddingData: WeddingSettings;
@@ -22,6 +22,7 @@ interface WeddingContextType {
   useAPI: boolean;
   toggleAPIMode: () => void;
   syncWithAPI: () => Promise<void>;
+  reloadActiveSettings: () => Promise<void>;
 }
 
 const WeddingContext = createContext<WeddingContextType | undefined>(undefined);
@@ -265,8 +266,7 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
     return saved ? JSON.parse(saved) : false;
   });
 
-  // Initialize API service
-  const apiService = new ApiService();
+  // Use singleton API service (already initialized in AuthContext)
 
   // Monitor online status
   useEffect(() => {
@@ -456,6 +456,54 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
     }
   };
 
+  // Reload active wedding settings from database
+  const reloadActiveSettings = async () => {
+    try {
+      const apiResult = await apiService.getWeddingSettings();
+      if (apiResult.success && apiResult.data.data) {
+        // Convert database format to context format
+        const dbData = apiResult.data.data;
+        const contextData = {
+          couple: {
+            groomFirstName: dbData.groom_first_name || '',
+            groomLastName: dbData.groom_full_name?.split(' ').slice(-1)[0] || '',
+            groomFullName: dbData.groom_full_name || '',
+            groomParents: dbData.groom_parents || '',
+            brideFirstName: dbData.bride_first_name || '',
+            brideLastName: dbData.bride_full_name?.split(' ').slice(-1)[0] || '',
+            brideFullName: dbData.bride_full_name || '',
+            brideParents: dbData.bride_parents || ''
+          },
+          events: [
+            {
+              id: '1',
+              eventName: 'Wedding Ceremony',
+              date: dbData.wedding_date || '',
+              time: dbData.wedding_time || '',
+              venue: dbData.wedding_venue || '',
+              address: dbData.wedding_address || '',
+              mapUrl: ''
+            },
+            ...(dbData.reception_date ? [{
+              id: '2',
+              eventName: 'Reception',
+              date: dbData.reception_date || '',
+              time: dbData.reception_time || '',
+              venue: dbData.reception_venue || '',
+              address: dbData.reception_address || '',
+              mapUrl: ''
+            }] : [])
+          ]
+        };
+
+        setWeddingData(prev => ({ ...prev, ...contextData }));
+        console.log('✅ Active wedding settings reloaded from database');
+      }
+    } catch (error) {
+      console.error('Failed to reload active settings:', error);
+    }
+  };
+
   const value: WeddingContextType = {
     weddingData,
     updateWeddingData,
@@ -474,7 +522,8 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
     isOnline,
     useAPI,
     toggleAPIMode,
-    syncWithAPI
+    syncWithAPI,
+    reloadActiveSettings
   };
 
   return (

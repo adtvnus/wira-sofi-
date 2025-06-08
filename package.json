@@ -8,11 +8,18 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "setup-db": "node setup-database.js",
-    "quick-start": "node quick-start.js",
-    "start-backend": "cd backend && npm run dev",
-    "start-full": "concurrently \"npm run start-backend\" \"npm run dev\"",
-    "install-all": "npm install && cd backend && npm install"
+    "backend": "node backend/server.cjs",
+    "setup-db": "node backend/database/setup.cjs",
+    "seed-db": "node backend/database/seeder.cjs",
+    "create-db": "node backend/database/create.cjs",
+    "health-check": "node tools/health-check.cjs",
+    "test-api": "node tools/test-endpoints.cjs",
+    "clean-db": "node backend/database/clean-database.cjs",
+    "sample-data": "node backend/database/add-sample-data.cjs",
+    "add-samples": "node backend/scripts/add-sample-data.cjs",
+    "check-db": "node backend/scripts/check-consistency.cjs",
+    "start-full": "concurrently \"npm run backend\" \"npm run dev\"",
+    "organize": "node scripts/organize-files.cjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
