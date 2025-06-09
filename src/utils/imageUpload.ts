@@ -170,7 +170,7 @@ export const fileToBase64 = async (file: File, compress: boolean = true): Promis
 // Handle image upload with security validation and compression
 export const handleImageUpload = async (
   input: File | string,
-  maxSizeKB: number = 2048
+  maxSizeKB: number = 5000
 ): Promise<ImageUploadResult> => {
   try {
     // If input is a string (URL), validate and return

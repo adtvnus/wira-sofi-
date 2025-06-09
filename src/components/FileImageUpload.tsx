@@ -14,7 +14,7 @@ const FileImageUpload: React.FC<FileImageUploadProps> = ({
   onImageChange,
   label = 'Upload Image',
   placeholder = 'Click to upload an image',
-  maxSizeKB = 2048,
+  maxSizeKB = 5000,
   className = ''
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -42,6 +42,13 @@ const FileImageUpload: React.FC<FileImageUploadProps> = ({
     setError('');
 
     try {
+      console.log('🔍 Starting upload process:', {
+        fileName: file.name,
+        fileSize: `${Math.round(fileSizeKB)}KB`,
+        fileType: file.type,
+        maxSizeKB
+      });
+
       // Upload to backend API
       const formData = new FormData();
       formData.append('image', file);
@@ -49,12 +56,20 @@ const FileImageUpload: React.FC<FileImageUploadProps> = ({
       // Get auth token from localStorage
       const token = localStorage.getItem('authToken');
       if (!token) {
+        console.error('❌ No auth token found');
         throw new Error('Authentication required');
       }
 
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const uploadUrl = `${API_BASE_URL}/quotes/upload-image`;
 
-      const response = await fetch(`${API_BASE_URL}/quotes/upload-image`, {
+      console.log('🔍 Upload details:', {
+        url: uploadUrl,
+        hasToken: !!token,
+        formDataEntries: Array.from(formData.entries()).map(([key, value]) => [key, value instanceof File ? `File: ${value.name}` : value])
+      });
+
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -62,12 +77,26 @@ const FileImageUpload: React.FC<FileImageUploadProps> = ({
         body: formData
       });
 
+      console.log('🔍 Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        console.error('❌ Upload failed:', errorData);
         throw new Error(errorData.error || 'Upload failed');
       }
 
       const result = await response.json();
+      console.log('✅ Upload successful:', result);
 
       if (result.success) {
         onImageChange(result.url);
@@ -84,8 +113,9 @@ const FileImageUpload: React.FC<FileImageUploadProps> = ({
       }
 
     } catch (err) {
-      console.error('Upload error:', err);
-      setError('Failed to upload image');
+      console.error('❌ Upload error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload image';
+      setError(errorMessage);
     } finally {
       setIsUploading(false);
       // Reset file input

@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
+import { useAuth } from '../../contexts/AuthContext';
 import AdminLayout from '../../layouts/AdminLayout';
-import ImageUpload from '../../components/ImageUpload';
 
 const BrideGroomManagement = () => {
-  const { weddingData, updateBrideGroomSettings } = useWedding();
+  const { weddingData, updateBrideGroomSettings, updateCouple } = useWedding();
+  const { token } = useAuth();
   const [formData, setFormData] = useState(weddingData.brideGroomSettings);
+  const [coupleData, setCoupleData] = useState(weddingData.couple);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const handleInputChange = (section: 'brideSettings' | 'groomSettings', field: string, value: string) => {
     setFormData(prev => ({
@@ -19,19 +23,184 @@ const BrideGroomManagement = () => {
     }));
   };
 
+  const handleCoupleInputChange = (field: string, value: string) => {
+    setCoupleData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Auto-generate full name when first or last name changes
+    if (field === 'groomFirstName' || field === 'groomLastName') {
+      const firstName = field === 'groomFirstName' ? value : coupleData.groomFirstName;
+      const lastName = field === 'groomLastName' ? value : coupleData.groomLastName;
+      setCoupleData(prev => ({
+        ...prev,
+        groomFullName: `${firstName} ${lastName}`.trim()
+      }));
+    }
+
+    if (field === 'brideFirstName' || field === 'brideLastName') {
+      const firstName = field === 'brideFirstName' ? value : coupleData.brideFirstName;
+      const lastName = field === 'brideLastName' ? value : coupleData.brideLastName;
+      setCoupleData(prev => ({
+        ...prev,
+        brideFullName: `${firstName} ${lastName}`.trim()
+      }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      updateBrideGroomSettings(formData);
-      setMessage('Pengaturan Bride & Groom berhasil disimpan!');
-      setTimeout(() => setMessage(''), 3000);
+      // Validate required fields
+      if (!coupleData.groomFirstName || !coupleData.brideFirstName) {
+        setMessage('❌ Nama depan pengantin pria dan wanita wajib diisi');
+        setTimeout(() => setMessage(''), 5000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Save couple data to database via API
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_BASE_URL}/bride-groom/1`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          groomFirstName: coupleData.groomFirstName,
+          groomLastName: coupleData.groomLastName,
+          groomFullName: coupleData.groomFullName,
+          groomParentNames: coupleData.groomParentNames,
+          brideFirstName: coupleData.brideFirstName,
+          brideLastName: coupleData.brideLastName,
+          brideFullName: coupleData.brideFullName,
+          brideParentNames: coupleData.brideParentNames,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Update context with new couple data
+          updateCouple(coupleData);
+          // Update bride groom settings
+          updateBrideGroomSettings(formData);
+
+          setMessage('✅ Data pengantin dan pengaturan berhasil disimpan!');
+          setTimeout(() => setMessage(''), 5000);
+        } else {
+          throw new Error(data.error || 'Failed to save couple data');
+        }
+      } else {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
     } catch (error) {
-      setMessage('Terjadi kesalahan saat menyimpan data.');
-      console.error('Error saving bride groom settings:', error);
+      console.error('Error saving bride groom data:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setMessage(`❌ Terjadi kesalahan: ${errorMessage}`);
+      setTimeout(() => setMessage(''), 8000);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // File validation function (same as Gallery Management)
+  const validateFile = (file: File): string | null => {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    if (!allowedTypes.includes(file.type)) {
+      return 'Format file tidak didukung. Gunakan JPG, PNG, atau WebP.';
+    }
+
+    if (file.size > maxSize) {
+      return 'Ukuran file terlalu besar. Maksimal 5MB.';
+    }
+
+    return null;
+  };
+
+  // Convert file to base64 (same as Gallery Management)
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle image upload for bride/groom photos (LOCAL PROCESSING ONLY)
+  const handleImageUpload = async (file: File, type: 'bride' | 'groom') => {
+    setUploading(true);
+
+    try {
+      console.log(`🖼️ Processing ${type} image upload:`, {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
+
+      const validationError = validateFile(file);
+      if (validationError) {
+        console.log('❌ Validation failed:', validationError);
+        setMessage(`❌ ${validationError}`);
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+
+      console.log('✅ File validation passed, converting to base64...');
+
+      // Convert to base64 for preview (NO API CALL)
+      const base64 = await fileToBase64(file);
+
+      console.log('✅ Base64 conversion completed, updating form data...');
+
+      // Update form data with new image (LOCAL STATE ONLY)
+      if (type === 'bride') {
+        handleInputChange('brideSettings', 'photo', base64);
+        console.log('✅ Bride photo updated in form data');
+      } else {
+        handleInputChange('groomSettings', 'photo', base64);
+        console.log('✅ Groom photo updated in form data');
+      }
+
+      setMessage(`✅ Foto ${type === 'bride' ? 'pengantin wanita' : 'pengantin pria'} berhasil diupload!`);
+      setTimeout(() => setMessage(''), 3000);
+
+    } catch (error) {
+      console.error('❌ Error processing image:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setMessage(`❌ Gagal mengupload gambar: ${errorMessage}`);
+      setTimeout(() => setMessage(''), 5000);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'bride' | 'groom') => {
+    e.preventDefault();
+    setDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleImageUpload(files[0], type);
     }
   };
 
@@ -61,6 +230,141 @@ const BrideGroomManagement = () => {
           )}
 
           <form onSubmit={handleSubmit} className="p-8 space-y-12">
+            {/* Couple Names Section */}
+            <div className="border border-purple-300 rounded-2xl p-8 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 shadow-lg">
+              <div className="flex items-center mb-8">
+                <i className="fas fa-heart text-purple-600 text-3xl mr-4"></i>
+                <div>
+                  <h2 className="text-2xl font-bold text-purple-800">Nama Pengantin</h2>
+                  <p className="text-purple-700">Edit nama pengantin pria dan wanita</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Groom Names */}
+                <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
+                    <i className="fas fa-male mr-2"></i>
+                    Pengantin Pria
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Depan *
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.groomFirstName}
+                        onChange={(e) => handleCoupleInputChange('groomFirstName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Wira"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Belakang
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.groomLastName}
+                        onChange={(e) => handleCoupleInputChange('groomLastName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Maulana"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Lengkap
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.groomFullName}
+                        onChange={(e) => handleCoupleInputChange('groomFullName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        placeholder="Wira Maulana"
+                        readOnly
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Otomatis dibuat dari nama depan + belakang</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Orang Tua
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.groomParentNames}
+                        onChange={(e) => handleCoupleInputChange('groomParentNames', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Bapak Ahmad & Ibu Siti"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bride Names */}
+                <div className="bg-pink-50 rounded-xl p-6 border border-pink-200">
+                  <h3 className="text-lg font-semibold text-pink-800 mb-4 flex items-center">
+                    <i className="fas fa-female mr-2"></i>
+                    Pengantin Wanita
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Depan *
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.brideFirstName}
+                        onChange={(e) => handleCoupleInputChange('brideFirstName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        placeholder="Sofi"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Belakang
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.brideLastName}
+                        onChange={(e) => handleCoupleInputChange('brideLastName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        placeholder="Kumala"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Lengkap
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.brideFullName}
+                        onChange={(e) => handleCoupleInputChange('brideFullName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 bg-gray-50"
+                        placeholder="Sofi Kumala"
+                        readOnly
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Otomatis dibuat dari nama depan + belakang</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Orang Tua
+                      </label>
+                      <input
+                        type="text"
+                        value={coupleData.brideParentNames}
+                        onChange={(e) => handleCoupleInputChange('brideParentNames', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        placeholder="Bapak Budi & Ibu Rina"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Bride Settings */}
             <div className="border border-pink-300 rounded-2xl p-8 bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 shadow-lg">
               <div className="flex items-center mb-8">
@@ -151,13 +455,70 @@ const BrideGroomManagement = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <ImageUpload
-                    currentImage={formData.brideSettings.photo}
-                    onImageChange={(url) => handleInputChange('brideSettings', 'photo', url)}
-                    label="Bride Photo"
-                    placeholder="Upload bride photo or enter URL"
-                    maxSizeKB={1024}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Bride Photo
+                  </label>
+
+                  {/* Current Image Preview */}
+                  {formData.brideSettings.photo && (
+                    <div className="mb-4">
+                      <img
+                        src={formData.brideSettings.photo}
+                        alt="Bride Preview"
+                        className="w-32 h-32 object-cover rounded-lg border border-pink-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Upload Area */}
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
+                      dragOver
+                        ? 'border-pink-400 bg-pink-50'
+                        : uploading
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-gray-300 hover:border-pink-400 hover:bg-pink-50'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, 'bride')}
+                  >
+                    <label className="cursor-pointer block">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleImageUpload(e.target.files[0], 'bride');
+                          }
+                        }}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+
+                      {uploading ? (
+                        <div className="flex flex-col items-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600 mb-2"></div>
+                          <p className="text-pink-600 font-medium">Mengupload...</p>
+                        </div>
+                      ) : dragOver ? (
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl mb-2">📤</div>
+                          <p className="text-pink-700 font-medium">Drop foto di sini</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl mb-2">👰</div>
+                          <p className="text-gray-700 font-medium">Upload Foto Bride</p>
+                          <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
+                          <div className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700 transition-colors">
+                            Pilih Foto
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 </div>
                 
                 <div className="md:col-span-2">
@@ -265,13 +626,70 @@ const BrideGroomManagement = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <ImageUpload
-                    currentImage={formData.groomSettings.photo}
-                    onImageChange={(url) => handleInputChange('groomSettings', 'photo', url)}
-                    label="Groom Photo"
-                    placeholder="Upload groom photo or enter URL"
-                    maxSizeKB={1024}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Groom Photo
+                  </label>
+
+                  {/* Current Image Preview */}
+                  {formData.groomSettings.photo && (
+                    <div className="mb-4">
+                      <img
+                        src={formData.groomSettings.photo}
+                        alt="Groom Preview"
+                        className="w-32 h-32 object-cover rounded-lg border border-blue-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Upload Area */}
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
+                      dragOver
+                        ? 'border-blue-400 bg-blue-50'
+                        : uploading
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, 'groom')}
+                  >
+                    <label className="cursor-pointer block">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleImageUpload(e.target.files[0], 'groom');
+                          }
+                        }}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+
+                      {uploading ? (
+                        <div className="flex flex-col items-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                          <p className="text-blue-600 font-medium">Mengupload...</p>
+                        </div>
+                      ) : dragOver ? (
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl mb-2">📤</div>
+                          <p className="text-blue-700 font-medium">Drop foto di sini</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <div className="text-4xl mb-2">🤵</div>
+                          <p className="text-gray-700 font-medium">Upload Foto Groom</p>
+                          <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
+                          <div className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                            Pilih Foto
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 </div>
                 
                 <div className="md:col-span-2">
@@ -322,7 +740,7 @@ const BrideGroomManagement = () => {
               </div>
               <div>
                 <span className="text-sm text-gray-500">{formData.brideSettings.label}</span>
-                <p className="font-semibold">{weddingData.couple.brideFirstName} {weddingData.couple.brideLastName}</p>
+                <p className="font-semibold">{coupleData.brideFirstName} {coupleData.brideLastName}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">{formData.brideSettings.parentLabel}</span>
@@ -347,7 +765,7 @@ const BrideGroomManagement = () => {
               </div>
               <div>
                 <span className="text-sm text-gray-500">{formData.groomSettings.label}</span>
-                <p className="font-semibold">{weddingData.couple.groomFirstName} {weddingData.couple.groomLastName}</p>
+                <p className="font-semibold">{coupleData.groomFirstName} {coupleData.groomLastName}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">{formData.groomSettings.parentLabel}</span>

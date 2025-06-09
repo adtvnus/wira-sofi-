@@ -6,7 +6,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   onImageChange,
   label,
   placeholder = 'Enter image URL or upload file',
-  maxSizeKB = 2048,
+  maxSizeKB = 5000,
   className = ''
 }) => {
   const [urlInput, setUrlInput] = useState(currentImage);

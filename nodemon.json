@@ -1,0 +1,32 @@
+{
+  "watch": [
+    "backend/",
+    "src/",
+    ".env"
+  ],
+  "ext": "js,cjs,ts,tsx,json,sql",
+  "ignore": [
+    "node_modules/",
+    "dist/",
+    "build/",
+    "*.log",
+    "*.tmp",
+    "uploads/",
+    "public/",
+    "docs/"
+  ],
+  "exec": "node backend/server.cjs",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 1000,
+  "verbose": true,
+  "colours": true,
+  "restartable": "rs",
+  "events": {
+    "start": "echo '🚀 Backend server starting with nodemon...'",
+    "restart": "echo '🔄 Backend server restarting due to file changes...'",
+    "crash": "echo '💥 Backend server crashed! Waiting for changes...'",
+    "exit": "echo '👋 Backend server stopped.'"
+  }
+}

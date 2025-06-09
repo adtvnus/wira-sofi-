@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ErrorBoundary from '../components/ErrorBoundary';
 import StorageWarning from '../components/StorageWarning';
@@ -11,10 +11,10 @@ interface AdminLayoutProps {
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: 'fas fa-chart-pie' },
-    { name: 'Settings List', href: '/admin/wedding-settings-list', icon: 'fas fa-list-alt' },
     { name: 'Guest Management', href: '/admin/guest-management', icon: 'fas fa-users' },
     { name: 'Invited Page', href: '/admin/invited-management', icon: 'fas fa-envelope-open-text' },
     { name: 'RSVP Management', href: '/admin/rsvp-management', icon: 'fas fa-clipboard-check' },
@@ -27,13 +27,27 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50" style={{ fontFamily: 'Ovo, serif' }}>
-      {/* Header */}
-      <header className="bg-gradient-to-r from-amber-100 via-orange-100 to-yellow-100 shadow-lg border-b border-amber-200">
+      {/* Fixed Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-100 via-orange-100 to-yellow-100 shadow-lg border-b border-amber-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="md:hidden mr-3 p-2 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-100 transition-colors"
+                aria-label="Toggle sidebar"
+              >
+                <i className={`fas ${sidebarOpen ? 'fa-times' : 'fa-bars'} text-xl`}></i>
+              </button>
+
               <i className="fas fa-heart text-amber-600 text-2xl mr-3"></i>
               <h1 className="text-xl font-semibold text-amber-800">
                 Wedding Admin Dashboard
@@ -79,9 +93,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <nav className="w-64 bg-gradient-to-b from-white via-amber-50 to-orange-50 shadow-lg min-h-screen border-r border-amber-200">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* Content Container with top padding for fixed header */}
+      <div className="flex pt-16">
+        {/* Fixed Sidebar */}
+        <nav className={`admin-sidebar fixed left-0 top-16 w-64 bg-gradient-to-b from-white via-amber-50 to-orange-50 shadow-lg h-screen border-r border-amber-200 overflow-y-auto z-40 scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-amber-100 transition-transform duration-300 ease-in-out md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
           <div className="p-4">
             <div className="mb-6 text-center">
               <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-400 rounded-full mx-auto mb-3 flex items-center justify-center">
@@ -109,8 +134,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           </div>
         </nav>
 
-        {/* Main Content */}
-        <main className="flex-1 p-6">
+        {/* Main Content with left margin for fixed sidebar */}
+        <main className="admin-main-content flex-1 md:ml-64 p-6 min-h-screen">
           <ErrorBoundary>
             <StorageWarning />
             {children}

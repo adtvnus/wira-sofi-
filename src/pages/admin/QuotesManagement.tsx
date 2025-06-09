@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminLayout from '../../layouts/AdminLayout';
-import FileImageUpload from '../../components/FileImageUpload';
 
 interface Quote {
   id: number;
@@ -21,6 +20,8 @@ const QuotesManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -287,6 +288,102 @@ const QuotesManagement = () => {
     }
   };
 
+  // File validation function (same as Gallery Management)
+  const validateFile = (file: File): string | null => {
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    if (!allowedTypes.includes(file.type)) {
+      return 'Format file tidak didukung. Gunakan JPG, PNG, atau WebP.';
+    }
+
+    if (file.size > maxSize) {
+      return 'Ukuran file terlalu besar. Maksimal 5MB.';
+    }
+
+    return null;
+  };
+
+  // Convert file to base64 (same as Gallery Management)
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle image upload for quotes (LOCAL PROCESSING ONLY)
+  const handleImageUpload = async (file: File, type: 'new' | 'edit') => {
+    setUploading(true);
+
+    try {
+      console.log(`🖼️ Processing quote image upload:`, {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        uploadType: type
+      });
+
+      const validationError = validateFile(file);
+      if (validationError) {
+        console.log('❌ Validation failed:', validationError);
+        setMessage(`❌ ${validationError}`);
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+
+      console.log('✅ File validation passed, converting to base64...');
+
+      // Convert to base64 for preview (NO API CALL)
+      const base64 = await fileToBase64(file);
+
+      console.log('✅ Base64 conversion completed, updating form data...');
+
+      // Update form data with new image (LOCAL STATE ONLY)
+      if (type === 'new') {
+        setNewQuote(prev => ({ ...prev, quote_image_url: base64 }));
+        console.log('✅ New quote image updated in form data');
+      } else if (editingQuote) {
+        setEditingQuote(prev => prev ? ({ ...prev, quote_image_url: base64 }) : null);
+        console.log('✅ Edit quote image updated in form data');
+      }
+
+      setMessage('✅ Gambar quote berhasil diupload!');
+      setTimeout(() => setMessage(''), 3000);
+
+    } catch (error) {
+      console.error('❌ Error processing image:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setMessage(`❌ Gagal mengupload gambar: ${errorMessage}`);
+      setTimeout(() => setMessage(''), 5000);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'new' | 'edit') => {
+    e.preventDefault();
+    setDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleImageUpload(files[0], type);
+    }
+  };
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -426,22 +523,70 @@ const QuotesManagement = () => {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                      <p className="text-xs text-yellow-800">
-                        <strong>Debug:</strong> ImageUpload component should render here. Current image: {newQuote.quote_image_url || 'None'}
-                      </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Quote Image
+                    </label>
+
+                    {/* Current Image Preview */}
+                    {newQuote.quote_image_url && (
+                      <div className="mb-4">
+                        <img
+                          src={newQuote.quote_image_url}
+                          alt="Quote Preview"
+                          className="w-32 h-32 object-cover rounded-lg border border-amber-200"
+                        />
+                      </div>
+                    )}
+
+                    {/* Upload Area */}
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
+                        dragOver
+                          ? 'border-amber-400 bg-amber-50'
+                          : uploading
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-gray-300 hover:border-amber-400 hover:bg-amber-50'
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, 'new')}
+                    >
+                      <label className="cursor-pointer block">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleImageUpload(e.target.files[0], 'new');
+                            }
+                          }}
+                          className="hidden"
+                          disabled={uploading}
+                        />
+
+                        {uploading ? (
+                          <div className="flex flex-col items-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
+                            <p className="text-amber-600 font-medium">Mengupload...</p>
+                          </div>
+                        ) : dragOver ? (
+                          <div className="flex flex-col items-center">
+                            <div className="text-4xl mb-2">📤</div>
+                            <p className="text-amber-700 font-medium">Drop gambar di sini</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <div className="text-4xl mb-2">💬</div>
+                            <p className="text-gray-700 font-medium">Upload Gambar Quote</p>
+                            <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
+                            <div className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
+                              Pilih Gambar
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                          </div>
+                        )}
+                      </label>
                     </div>
-                    {/* File Upload for Quote Image */}
-                    <FileImageUpload
-                      currentImage={newQuote.quote_image_url}
-                      onImageChange={(url) => {
-                        console.log('🖼️ Image uploaded:', url);
-                        setNewQuote(prev => ({ ...prev, quote_image_url: url }));
-                      }}
-                      label="Quote Image"
-                      placeholder="Click 'Choose File' to select an image for this quote"
-                      maxSizeKB={2048}
-                    />
                   </div>
                   <div className="md:col-span-2 flex space-x-3">
                     <button
@@ -604,13 +749,70 @@ const QuotesManagement = () => {
                           />
                         </div>
                         <div className="md:col-span-2">
-                          <FileImageUpload
-                            currentImage={editingQuote.quote_image_url}
-                            onImageChange={(url) => setEditingQuote(prev => prev ? ({ ...prev, quote_image_url: url }) : null)}
-                            label="Quote Image"
-                            placeholder="Click 'Choose File' to select a new image for this quote"
-                            maxSizeKB={2048}
-                          />
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Quote Image
+                          </label>
+
+                          {/* Current Image Preview */}
+                          {editingQuote.quote_image_url && (
+                            <div className="mb-4">
+                              <img
+                                src={editingQuote.quote_image_url}
+                                alt="Quote Preview"
+                                className="w-32 h-32 object-cover rounded-lg border border-amber-200"
+                              />
+                            </div>
+                          )}
+
+                          {/* Upload Area */}
+                          <div
+                            className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
+                              dragOver
+                                ? 'border-amber-400 bg-amber-50'
+                                : uploading
+                                ? 'border-blue-400 bg-blue-50'
+                                : 'border-gray-300 hover:border-amber-400 hover:bg-amber-50'
+                            }`}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, 'edit')}
+                          >
+                            <label className="cursor-pointer block">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleImageUpload(e.target.files[0], 'edit');
+                                  }
+                                }}
+                                className="hidden"
+                                disabled={uploading}
+                              />
+
+                              {uploading ? (
+                                <div className="flex flex-col items-center">
+                                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
+                                  <p className="text-amber-600 font-medium">Mengupload...</p>
+                                </div>
+                              ) : dragOver ? (
+                                <div className="flex flex-col items-center">
+                                  <div className="text-4xl mb-2">📤</div>
+                                  <p className="text-amber-700 font-medium">Drop gambar di sini</p>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center">
+                                  <div className="text-4xl mb-2">💬</div>
+                                  <p className="text-gray-700 font-medium">Upload Gambar Quote</p>
+                                  <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
+                                  <div className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
+                                    Pilih Gambar
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                                </div>
+                              )}
+                            </label>
+                          </div>
                         </div>
                         <div className="md:col-span-2 flex space-x-3">
                           <button

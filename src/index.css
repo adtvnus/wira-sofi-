@@ -17,3 +17,53 @@ body {
   background-color: #F7F3ED;
   font-family: 'Ovo', serif;
 }
+
+/* === Smooth Scrolling === */
+html {
+  scroll-behavior: smooth;
+}
+
+/* === Custom Scrollbar for Sidebar === */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #FEF3C7; /* amber-100 */
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #FCD34D; /* amber-300 */
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #F59E0B; /* amber-500 */
+}
+
+/* === Fixed Layout Improvements === */
+.admin-layout-container {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* === Responsive Sidebar === */
+@media (max-width: 768px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .admin-main-content {
+    margin-left: 0 !important;
+  }
+}

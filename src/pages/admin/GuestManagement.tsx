@@ -25,7 +25,7 @@ interface Guest {
 
 const GuestManagement = () => {
   const { generateGuestUrl, encodeGuestName } = useGuestName();
-  const { token } = useAuth();
+  const { token, isAuthenticated, user } = useAuth();
 
   const [guests, setGuests] = useState<Guest[]>([]);
   const [newGuestName, setNewGuestName] = useState('');
@@ -38,6 +38,15 @@ const GuestManagement = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+  // Debug auth state (can be removed in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔐 Auth state:', {
+      isAuthenticated,
+      hasToken: !!token,
+      user: user?.username
+    });
+  }
+
   const generateInvitationCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -47,12 +56,19 @@ const GuestManagement = () => {
     return result;
   };
 
-  // Load guests from API or localStorage
+  // Load guests from API when component mounts and token is available
   useEffect(() => {
-    loadGuests();
-  }, []);
+    if (token && isAuthenticated) {
+      loadGuests();
+    }
+  }, [token, isAuthenticated]);
 
   const loadGuests = async () => {
+    if (!token) {
+      setMessage('Token autentikasi tidak tersedia. Silakan login ulang.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/guests`, {
@@ -64,19 +80,29 @@ const GuestManagement = () => {
 
       if (response.ok) {
         const data = await response.json();
+
         if (data.success) {
           const formattedGuests = data.data.map(formatGuestFromAPI);
           setGuests(formattedGuests);
+
+          // Clear any previous error messages
+          if (message && message.includes('Gagal')) {
+            setMessage('');
+          }
         } else {
           throw new Error(data.error || 'Failed to load guests');
         }
       } else {
-        throw new Error('Failed to fetch guests');
+        if (response.status === 401) {
+          setMessage('Sesi login telah berakhir. Silakan login ulang.');
+        } else {
+          throw new Error(`HTTP ${response.status}: Failed to fetch guests`);
+        }
       }
     } catch (error) {
       console.error('Error loading guests:', error);
-      setMessage('Gagal memuat data tamu dari database');
-      setTimeout(() => setMessage(''), 3000);
+      setMessage('Gagal memuat data tamu dari database. Periksa koneksi internet Anda.');
+      setTimeout(() => setMessage(''), 5000);
     } finally {
       setIsLoading(false);
     }
@@ -113,6 +139,16 @@ const GuestManagement = () => {
       return;
     }
 
+    if (!token) {
+      setMessage('Token autentikasi tidak tersedia. Silakan login ulang.');
+      return;
+    }
+
+    // Log for debugging (can be removed in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Adding new guest:', newGuestName.trim());
+    }
+
     setIsAdding(true);
 
     try {
@@ -132,6 +168,7 @@ const GuestManagement = () => {
 
       if (response.ok) {
         const data = await response.json();
+
         if (data.success) {
           await loadGuests(); // Reload from API
           setMessage('Tamu berhasil ditambahkan ke database!');
@@ -145,14 +182,19 @@ const GuestManagement = () => {
           throw new Error(data.error || 'Failed to add guest');
         }
       } else {
-        throw new Error('Failed to add guest');
+        if (response.status === 401) {
+          throw new Error('Sesi login telah berakhir. Silakan login ulang.');
+        } else {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
       }
 
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error adding guest:', error);
-      setMessage('Gagal menambahkan tamu ke database');
-      setTimeout(() => setMessage(''), 3000);
+      setMessage(`Gagal menambahkan tamu: ${error.message}`);
+      setTimeout(() => setMessage(''), 5000);
     } finally {
       setIsAdding(false);
     }
@@ -236,6 +278,33 @@ const GuestManagement = () => {
     setTimeout(() => setMessage(''), 3000);
   };
 
+  // Show authentication error if not authenticated
+  if (!isAuthenticated || !token) {
+    return (
+      <AdminLayout>
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <i className="fas fa-exclamation-triangle text-2xl text-red-600"></i>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Authentication Required</h3>
+                <p className="text-gray-600 mb-4">Anda perlu login untuk mengakses halaman ini.</p>
+                <button
+                  onClick={() => window.location.href = '/admin/login'}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Login Sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -245,6 +314,7 @@ const GuestManagement = () => {
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Memuat data tamu...</p>
+                <p className="text-gray-500 text-sm mt-2">Token: {token ? '✅ Valid' : '❌ Missing'}</p>
               </div>
             </div>
           </div>
@@ -268,6 +338,11 @@ const GuestManagement = () => {
             <div className="flex items-center space-x-2">
               <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
                 🗄️ MySQL Database
+              </span>
+              <span className={`px-3 py-1 rounded-full text-sm ${
+                token ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                🔐 {token ? 'Authenticated' : 'Not Authenticated'}
               </span>
               <span className="text-sm text-gray-500">
                 {guests.length} tamu

@@ -58,18 +58,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
-      // Check if we have saved user data for manual tokens
-      const savedUser = localStorage.getItem('auth-user');
-      if (savedUser && authToken.startsWith('eyJ')) {
+      // Check if token is expired (basic JWT check)
+      if (authToken.startsWith('eyJ')) {
         try {
-          const userData = JSON.parse(savedUser);
-          console.log('🔄 Using saved user data for manual token');
-          setUser(userData);
-          setToken(authToken);
+          const payload = JSON.parse(atob(authToken.split('.')[1]));
+          const currentTime = Math.floor(Date.now() / 1000);
+
+          if (payload.exp && payload.exp < currentTime) {
+            console.log('🔄 Token expired, clearing and requiring re-login');
+            localStorage.removeItem('auth-token');
+            localStorage.removeItem('auth-user');
+            setIsLoading(false);
+            return;
+          }
+        } catch (parseError) {
+          console.log('❌ Failed to parse token payload, clearing token');
+          localStorage.removeItem('auth-token');
+          localStorage.removeItem('auth-user');
           setIsLoading(false);
           return;
-        } catch (parseError) {
-          console.log('❌ Failed to parse saved user data');
         }
       }
 
@@ -103,22 +110,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           localStorage.removeItem('auth-user');
         }
       } catch (apiError) {
-        console.log('❌ API verification failed, but token might still be valid');
-        // If API is down but we have a valid-looking JWT token, keep it
-        if (authToken.startsWith('eyJ') && savedUser) {
-          try {
-            const userData = JSON.parse(savedUser);
-            setUser(userData);
-            setToken(authToken);
-            console.log('✅ Using cached authentication due to API unavailability');
-          } catch (parseError) {
-            localStorage.removeItem('auth-token');
-            localStorage.removeItem('auth-user');
-          }
-        } else {
-          localStorage.removeItem('auth-token');
-          localStorage.removeItem('auth-user');
-        }
+        console.log('❌ API verification failed, clearing token to force fresh login');
+        // Always clear token if API verification fails to ensure fresh login
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('auth-user');
       }
     } catch (error) {
       console.error('Token verification failed:', error);
@@ -149,26 +144,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } catch (healthError) {
         console.error('❌ API connectivity failed:', healthError);
 
-        // Fallback: Use manual token if available for these credentials
-        if (username === 'admin' && password === 'admin') {
-          console.log('🔄 Using fallback authentication for admin...');
-          const fallbackToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJpYXQiOjE3NDkzNzI5NjEsImV4cCI6MTc0OTQ1OTM2MX0.ulV5oir81C_4BB__-GSxvD83_HzonSKzM8HDk7CEJvE';
-          const fallbackUser = {
-            id: 1,
-            username: 'admin',
-            email: 'admin@wedding.com',
-            fullName: 'Super Admin',
-            role: 'super_admin'
-          };
-
-          setUser(fallbackUser);
-          setToken(fallbackToken);
-          localStorage.setItem('auth-token', fallbackToken);
-          localStorage.setItem('auth-user', JSON.stringify(fallbackUser));
-
-          console.log('✅ Fallback authentication successful');
-          return { success: true };
-        }
+        // No fallback token - always require fresh login when API is unavailable
+        console.log('❌ API unavailable and no fallback available');
+        console.log('💡 Please ensure backend server is running and try again');
 
         return { success: false, error: 'Cannot connect to server. Please check your connection.' };
       }

@@ -97,7 +97,7 @@ const quotesStorage = multer.diskStorage({
 
 const quotesUpload = multer({
   storage: quotesStorage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for quotes
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for quotes
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -121,7 +121,25 @@ const dbConfig = {
 };
 
 async function getConnection() {
-  return await mysql.createConnection(dbConfig);
+  try {
+    console.log('🔄 Attempting database connection...');
+    console.log('   Config:', { ...dbConfig, password: '***' });
+    const connection = await mysql.createConnection(dbConfig);
+    console.log('✅ Database connection successful');
+    return connection;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Error errno:', error.errno);
+    console.error('   Error syscall:', error.syscall);
+    console.error('   Error address:', error.address);
+    console.error('   Error port:', error.port);
+
+    // Return a more user-friendly error
+    const friendlyError = new Error(`Database connection failed: ${error.code || error.message}`);
+    friendlyError.originalError = error;
+    throw friendlyError;
+  }
 }
 
 // Authentication middleware
@@ -310,38 +328,108 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
   res.json({ success: true, user: req.user });
 });
 
-// Wedding Settings endpoints
+// Wedding Settings endpoints (using relational structure)
 app.get('/api/wedding-settings', authenticateToken, async (req, res) => {
   try {
     const connection = await getConnection();
+
+    // Get active wedding settings with couple data using manual JOIN
     const [rows] = await connection.query(`
-      SELECT * FROM wedding_settings
-      WHERE is_active = TRUE
-      ORDER BY created_at DESC
+      SELECT
+        ws.id,
+        ws.wedding_date,
+        ws.wedding_time,
+        ws.wedding_venue,
+        ws.wedding_address,
+        ws.wedding_maps_url,
+        ws.reception_date,
+        ws.reception_time,
+        ws.reception_venue,
+        ws.reception_address,
+        ws.reception_maps_url,
+        ws.is_active,
+        ws.created_by,
+        ws.created_at,
+        ws.updated_at,
+
+        -- Couple data from relational table
+        COALESCE(cs.id, 0) as couple_id,
+        COALESCE(cs.groom_first_name, 'Pengantin Pria') as groom_first_name,
+        COALESCE(cs.groom_last_name, '') as groom_last_name,
+        COALESCE(cs.groom_full_name, 'Nama Pengantin Pria') as groom_full_name,
+        COALESCE(cs.groom_parent_names, '') as groom_parent_names,
+        COALESCE(cs.bride_first_name, 'Pengantin Wanita') as bride_first_name,
+        COALESCE(cs.bride_last_name, '') as bride_last_name,
+        COALESCE(cs.bride_full_name, 'Nama Pengantin Wanita') as bride_full_name,
+        COALESCE(cs.bride_parent_names, '') as bride_parent_names
+
+      FROM wedding_settings ws
+      LEFT JOIN couple_settings cs ON ws.couple_id = cs.id AND cs.is_active = TRUE
+      WHERE ws.is_active = TRUE
+      ORDER BY ws.created_at DESC
       LIMIT 1
     `);
+
     await connection.end();
 
+    console.log(`📊 Found active wedding setting with couple data:`, rows[0] ? 'Yes' : 'No');
     res.json({ success: true, data: rows[0] || {} });
   } catch (error) {
-    console.error('Error fetching wedding settings:', error);
+    console.error('❌ Error fetching wedding settings:', error);
     res.status(500).json({ error: 'Failed to fetch wedding settings' });
   }
 });
 
-// Get all wedding settings for CRUD table
+// Get all wedding settings for CRUD table (using relational structure)
 app.get('/api/wedding-settings/all', authenticateToken, async (req, res) => {
   try {
     const connection = await getConnection();
+
+    // Use manual JOIN instead of view (in case view doesn't exist)
     const [rows] = await connection.query(`
-      SELECT ws.*, au.full_name as created_by_name
+      SELECT
+        ws.id,
+        ws.wedding_date,
+        ws.wedding_time,
+        ws.wedding_venue,
+        ws.wedding_address,
+        ws.wedding_maps_url,
+        ws.reception_date,
+        ws.reception_time,
+        ws.reception_venue,
+        ws.reception_address,
+        ws.reception_maps_url,
+        ws.is_active,
+        ws.created_by,
+        ws.created_at,
+        ws.updated_at,
+
+        -- Couple data from relational table
+        COALESCE(cs.id, 0) as couple_id,
+        COALESCE(cs.groom_first_name, 'Pengantin Pria') as groom_first_name,
+        COALESCE(cs.groom_last_name, '') as groom_last_name,
+        COALESCE(cs.groom_full_name, 'Nama Pengantin Pria') as groom_full_name,
+        COALESCE(cs.groom_parent_names, '') as groom_parent_names,
+        COALESCE(cs.groom_photo, 'public/images/BrideGroom/groom.jpg') as groom_photo,
+        COALESCE(cs.bride_first_name, 'Pengantin Wanita') as bride_first_name,
+        COALESCE(cs.bride_last_name, '') as bride_last_name,
+        COALESCE(cs.bride_full_name, 'Nama Pengantin Wanita') as bride_full_name,
+        COALESCE(cs.bride_parent_names, '') as bride_parent_names,
+        COALESCE(cs.bride_photo, 'public/images/BrideGroom/bride.jpg') as bride_photo,
+
+        -- Admin user info
+        COALESCE(au.full_name, 'Admin') as created_by_name
+
       FROM wedding_settings ws
+      LEFT JOIN couple_settings cs ON ws.couple_id = cs.id AND cs.is_active = TRUE
       LEFT JOIN admin_users au ON ws.created_by = au.id
       ORDER BY ws.created_at DESC
     `);
+
     await connection.end();
 
-    res.json({ success: true, data: rows });
+    console.log(`📊 Found ${rows.length} wedding settings with couple data`);
+    res.json({ success: true, data: { data: rows } });
   } catch (error) {
     console.error('Error fetching all wedding settings:', error);
     res.status(500).json({ error: 'Failed to fetch wedding settings list' });
@@ -435,23 +523,52 @@ app.post('/api/wedding-settings', authenticateToken, async (req, res) => {
     }
 
     const connection = await getConnection();
-    
-    // Get current settings for logging
-    const [currentSettings] = await connection.query(`
-      SELECT * FROM wedding_settings WHERE is_active = TRUE LIMIT 1
+
+    // Get or create couple_settings for this wedding
+    let coupleId;
+    const [existingCouple] = await connection.query(`
+      SELECT id FROM couple_settings WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 1
     `);
-    
+
+    if (existingCouple.length > 0) {
+      coupleId = existingCouple[0].id;
+      console.log('🔗 Using existing couple_settings ID:', coupleId);
+    } else {
+      // Create default couple_settings if none exists
+      console.log('➕ Creating default couple_settings...');
+      const [coupleResult] = await connection.query(`
+        INSERT INTO couple_settings (
+          wedding_id, groom_first_name, groom_full_name,
+          bride_first_name, bride_full_name, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [1, 'Pengantin Pria', 'Nama Pengantin Pria', 'Pengantin Wanita', 'Nama Pengantin Wanita', req.user.id]);
+      coupleId = coupleResult.insertId;
+      console.log('✅ Created couple_settings ID:', coupleId);
+    }
+
+    // Get current settings for logging (skip if view doesn't exist)
+    let currentSettings = [];
+    try {
+      const [settings] = await connection.query(`
+        SELECT * FROM wedding_settings WHERE is_active = TRUE LIMIT 1
+      `);
+      currentSettings = settings;
+    } catch (error) {
+      console.log('⚠️ Could not fetch current settings for logging:', error.message);
+    }
+
     // Deactivate existing settings
     await connection.query('UPDATE wedding_settings SET is_active = FALSE');
-    
-    // Insert new settings
+
+    // Insert new settings with couple relation
     const [result] = await connection.query(`
       INSERT INTO wedding_settings (
-        wedding_date, wedding_time, wedding_venue, wedding_address,
+        couple_id, wedding_date, wedding_time, wedding_venue, wedding_address,
         reception_date, reception_time, reception_venue, reception_address,
         created_by, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
     `, [
+      coupleId,
       settingsData.weddingDate,
       settingsData.weddingTime,
       settingsData.weddingVenue,
@@ -465,17 +582,21 @@ app.post('/api/wedding-settings', authenticateToken, async (req, res) => {
 
     await connection.end();
 
+    console.log('✅ Wedding settings created with relational structure');
+    console.log('   Wedding ID:', result.insertId);
+    console.log('   Couple ID:', coupleId);
+
     // Log activity
     await logActivity(
-      req.user.id, 
-      'UPDATE', 
-      'wedding_settings', 
+      req.user.id,
+      'UPDATE',
+      'wedding_settings',
       result.insertId,
       currentSettings[0] || null,
       settingsData,
       req
     );
-    
+
     res.json({ success: true, id: result.insertId, message: 'Wedding settings updated successfully' });
   } catch (error) {
     console.error('Error updating wedding settings:', error);
@@ -505,17 +626,25 @@ app.get('/api/guests', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/guests', authenticateToken, async (req, res) => {
+  console.log('🚀 ADD GUEST FUNCTION STARTED');
   try {
+    console.log('🔍 Add Guest Request:');
+    console.log('   Body:', req.body);
+    console.log('   User:', req.user);
+
     const { guestName, guestEmail, guestPhone, guestCount } = req.body;
 
     if (!guestName) {
+      console.log('❌ Validation failed: Guest name is required');
       return res.status(400).json({ error: 'Guest name is required' });
     }
 
     // Generate invitation code
     const invitationCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    console.log('✅ Generated invitation code:', invitationCode);
 
     const connection = await getConnection();
+    console.log('✅ Database connection established');
 
     // Get active wedding ID
     const [weddings] = await connection.query('SELECT id FROM wedding_settings WHERE is_active = TRUE LIMIT 1');
@@ -524,7 +653,9 @@ app.post('/api/guests', authenticateToken, async (req, res) => {
     if (weddings.length > 0) {
       weddingId = weddings[0].id;
     }
+    console.log('✅ Wedding ID:', weddingId);
 
+    console.log('🔄 Inserting guest into database...');
     const [result] = await connection.query(`
       INSERT INTO wedding_guests (
         wedding_id, guest_name, guest_email, guest_phone,
@@ -532,7 +663,10 @@ app.post('/api/guests', authenticateToken, async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, TRUE)
     `, [weddingId, guestName, guestEmail, guestPhone, invitationCode, guestCount || 1, req.user.id]);
 
+    console.log('✅ Guest inserted with ID:', result.insertId);
+
     // Get the inserted guest
+    console.log('🔄 Fetching inserted guest data...');
     const [newGuest] = await connection.query(`
       SELECT id, guest_name, guest_email, guest_phone, guest_count,
              rsvp_status, invitation_code, created_at, updated_at
@@ -541,14 +675,24 @@ app.post('/api/guests', authenticateToken, async (req, res) => {
     `, [result.insertId]);
 
     await connection.end();
+    console.log('✅ Database connection closed');
 
     // Log activity
+    console.log('🔄 Logging activity...');
     await logActivity(req.user.id, 'CREATE', 'wedding_guests', result.insertId, null, newGuest[0], req);
+    console.log('✅ Activity logged');
 
+    console.log('✅ Returning guest data:', newGuest[0]);
     res.status(201).json({ success: true, data: newGuest[0] });
   } catch (error) {
-    console.error('Error adding guest:', error);
-    res.status(500).json({ error: 'Failed to add guest' });
+    console.error('❌ Error adding guest:', error);
+    console.error('   Error message:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Failed to add guest',
+      details: error.message
+    });
   }
 });
 
@@ -692,11 +836,12 @@ app.get('/api/quotes', authenticateToken, async (req, res) => {
   try {
     const connection = await getConnection();
     const [rows] = await connection.query(`
-      SELECT q.*, w.groom_first_name, w.bride_first_name
-      FROM wedding_quotes q
+      SELECT q.*, c.groom_first_name, c.bride_first_name
+      FROM quotes_settings q
       JOIN wedding_settings w ON q.wedding_id = w.id
+      LEFT JOIN couple_settings c ON w.id = c.wedding_id AND c.is_active = TRUE
       WHERE q.is_active = TRUE AND w.is_active = TRUE
-      ORDER BY q.display_order ASC, q.created_at DESC
+      ORDER BY q.created_at DESC
     `);
     await connection.end();
 
@@ -726,21 +871,21 @@ app.post('/api/quotes', authenticateToken, async (req, res) => {
     }
 
     const [result] = await connection.query(`
-      INSERT INTO wedding_quotes (
-        wedding_id, quote_text, quote_author, quote_category,
-        quote_image_url, display_order, created_by, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
-    `, [weddingId, quoteText, quoteAuthor || null, quoteCategory || 'general', quoteImage || null, displayOrder || 0, req.user.id]);
+      INSERT INTO quotes_settings (
+        wedding_id, header_title, header_subtitle, bottom_message,
+        quotes_image, is_active, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+    `, [weddingId, quoteText, quoteAuthor || '', quoteCategory || '', quoteImage || '', req.user.id]);
 
-    // Get the inserted quote
+    // Get the inserted quote settings
     const [newQuote] = await connection.query(`
-      SELECT * FROM wedding_quotes WHERE id = ?
+      SELECT * FROM quotes_settings WHERE id = ?
     `, [result.insertId]);
 
     await connection.end();
 
     // Log activity
-    await logActivity(req.user.id, 'CREATE', 'wedding_quotes', result.insertId, null, newQuote[0], req);
+    await logActivity(req.user.id, 'CREATE', 'quotes_settings', result.insertId, null, newQuote[0], req);
 
     res.status(201).json({ success: true, data: newQuote[0] });
   } catch (error) {
@@ -758,30 +903,30 @@ app.put('/api/quotes/:id', authenticateToken, async (req, res) => {
 
     // Get current quote data for logging
     const [currentQuote] = await connection.query(`
-      SELECT * FROM wedding_quotes WHERE id = ? AND is_active = TRUE
+      SELECT * FROM quotes_settings WHERE id = ? AND is_active = TRUE
     `, [id]);
 
     if (currentQuote.length === 0) {
       await connection.end();
-      return res.status(404).json({ error: 'Quote not found' });
+      return res.status(404).json({ error: 'Quote settings not found' });
     }
 
     await connection.query(`
-      UPDATE wedding_quotes
-      SET quote_text = ?, quote_author = ?, quote_category = ?,
-          quote_image_url = ?, display_order = ?, is_active = ?, updated_at = NOW()
+      UPDATE quotes_settings
+      SET header_title = ?, header_subtitle = ?, bottom_message = ?,
+          quotes_image = ?, is_active = ?, updated_at = NOW()
       WHERE id = ?
-    `, [quoteText, quoteAuthor, quoteCategory, quoteImage, displayOrder, isActive, id]);
+    `, [quoteText, quoteAuthor, quoteCategory, quoteImage, isActive, id]);
 
-    // Get updated quote
+    // Get updated quote settings
     const [updatedQuote] = await connection.query(`
-      SELECT * FROM wedding_quotes WHERE id = ?
+      SELECT * FROM quotes_settings WHERE id = ?
     `, [id]);
 
     await connection.end();
 
     // Log activity
-    await logActivity(req.user.id, 'UPDATE', 'wedding_quotes', id, currentQuote[0], updatedQuote[0], req);
+    await logActivity(req.user.id, 'UPDATE', 'quotes_settings', id, currentQuote[0], updatedQuote[0], req);
 
     res.json({ success: true, data: updatedQuote[0] });
   } catch (error) {
@@ -798,17 +943,17 @@ app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
 
     // Get current quote data for logging
     const [currentQuote] = await connection.query(`
-      SELECT * FROM wedding_quotes WHERE id = ? AND is_active = TRUE
+      SELECT * FROM quotes_settings WHERE id = ? AND is_active = TRUE
     `, [id]);
 
     if (currentQuote.length === 0) {
       await connection.end();
-      return res.status(404).json({ error: 'Quote not found' });
+      return res.status(404).json({ error: 'Quote settings not found' });
     }
 
     // Soft delete
     await connection.query(`
-      UPDATE wedding_quotes
+      UPDATE quotes_settings
       SET is_active = FALSE, updated_at = NOW()
       WHERE id = ?
     `, [id]);
@@ -816,9 +961,9 @@ app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
     await connection.end();
 
     // Log activity
-    await logActivity(req.user.id, 'DELETE', 'wedding_quotes', id, currentQuote[0], null, req);
+    await logActivity(req.user.id, 'DELETE', 'quotes_settings', id, currentQuote[0], null, req);
 
-    res.json({ success: true, message: 'Quote deleted successfully' });
+    res.json({ success: true, message: 'Quote settings deleted successfully' });
   } catch (error) {
     console.error('Error deleting quote:', error);
     res.status(500).json({ error: 'Failed to delete quote' });
@@ -826,16 +971,31 @@ app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
 });
 
 // Quotes Image Upload endpoint
-app.post('/api/quotes/upload-image', authenticateToken, quotesUpload.single('image'), async (req, res) => {
+app.post('/api/quotes/upload-image', authenticateToken, (req, res, next) => {
+  console.log('🔍 Upload request received:', {
+    headers: req.headers,
+    contentType: req.get('Content-Type'),
+    contentLength: req.get('Content-Length'),
+    body: req.body
+  });
+  next();
+}, quotesUpload.single('image'), async (req, res) => {
   try {
+    console.log('🔍 After multer processing:', {
+      file: req.file,
+      body: req.body,
+      hasFile: !!req.file
+    });
+
     if (!req.file) {
+      console.log('❌ No file received in request');
       return res.status(400).json({ error: 'No image file provided' });
     }
 
     // Generate the public URL for the uploaded image
     const imageUrl = `/images/quotes/${req.file.filename}`;
 
-    console.log('📁 Quote image uploaded:', {
+    console.log('📁 Quote image uploaded successfully:', {
       originalName: req.file.originalname,
       filename: req.file.filename,
       size: req.file.size,
@@ -854,8 +1014,212 @@ app.post('/api/quotes/upload-image', authenticateToken, quotesUpload.single('ima
       size: req.file.size
     });
   } catch (error) {
-    console.error('Error uploading quote image:', error);
+    console.error('❌ Error uploading quote image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Thanks Settings endpoints
+app.get('/api/thanks-settings', async (req, res) => {
+  try {
+    console.log('📊 Thanks settings requested');
+
+    const connection = await getConnection();
+
+    // Check if thanks_settings table exists
+    const [tableExists] = await connection.query(`
+      SELECT COUNT(*) as count FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = 'thanks_settings'
+    `);
+
+    if (tableExists[0].count === 0) {
+      console.log('⚠️ thanks_settings table does not exist, returning default settings');
+      await connection.end();
+
+      // Return default settings if table doesn't exist
+      const defaultSettings = {
+        id: 0,
+        headerTitle: 'Thank You',
+        headerSubtitle: 'Terima Kasih',
+        mainMessage: 'Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya.',
+        subMessage: 'Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua.',
+        coupleNames: 'Wira & Sofi',
+        blessingQuoteArabic: 'Barakallahu lakuma wa baraka alaikuma wa jama\'a bainakuma fi khair',
+        blessingQuoteTranslation: 'Semoga Allah memberkati kalian dan menyatukan kalian dalam kebaikan',
+        backgroundImage: '',
+        showSocialMedia: false,
+        socialMediaInstagram: '',
+        socialMediaFacebook: '',
+        socialMediaTwitter: ''
+      };
+
+      return res.json({
+        success: true,
+        data: defaultSettings
+      });
+    }
+
+    const [rows] = await connection.query(
+      'SELECT * FROM thanks_settings ORDER BY created_at DESC LIMIT 1'
+    );
+
+    if (rows.length === 0) {
+      // Return default settings if none found
+      const defaultSettings = {
+        id: 0,
+        headerTitle: 'Thank You',
+        headerSubtitle: 'Terima Kasih',
+        mainMessage: 'Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya.',
+        subMessage: 'Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua.',
+        coupleNames: 'Wira & Sofi',
+        blessingQuoteArabic: 'Barakallahu lakuma wa baraka alaikuma wa jama\'a bainakuma fi khair',
+        blessingQuoteTranslation: 'Semoga Allah memberkati kalian dan menyatukan kalian dalam kebaikan',
+        backgroundImage: '',
+        showSocialMedia: false,
+        socialMediaInstagram: '',
+        socialMediaFacebook: '',
+        socialMediaTwitter: ''
+      };
+
+      return res.json({
+        success: true,
+        data: defaultSettings
+      });
+    }
+
+    const settings = rows[0];
+    const responseData = {
+      id: settings.id,
+      headerTitle: settings.header_title,
+      headerSubtitle: settings.header_subtitle,
+      mainMessage: settings.main_message,
+      subMessage: settings.sub_message,
+      coupleNames: settings.couple_names,
+      blessingQuoteArabic: settings.blessing_quote_arabic,
+      blessingQuoteTranslation: settings.blessing_quote_translation,
+      backgroundImage: settings.background_image,
+      showSocialMedia: settings.show_social_media,
+      socialMediaInstagram: settings.social_media_instagram,
+      socialMediaFacebook: settings.social_media_facebook,
+      socialMediaTwitter: settings.social_media_twitter
+    };
+
+    console.log('✅ Thanks settings retrieved:', responseData);
+    await connection.end();
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching thanks settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch thanks settings'
+    });
+  }
+});
+
+app.put('/api/thanks-settings', authenticateToken, async (req, res) => {
+  try {
+    console.log('📝 Thanks settings update requested:', req.body);
+
+    const {
+      headerTitle,
+      headerSubtitle,
+      mainMessage,
+      subMessage,
+      coupleNames,
+      blessingQuoteArabic,
+      blessingQuoteTranslation,
+      backgroundImage,
+      showSocialMedia,
+      socialMediaInstagram,
+      socialMediaFacebook,
+      socialMediaTwitter
+    } = req.body;
+
+    const connection = await getConnection();
+
+    // Check if thanks_settings table exists
+    const [tableExists] = await connection.query(`
+      SELECT COUNT(*) as count FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = 'thanks_settings'
+    `);
+
+    if (tableExists[0].count === 0) {
+      console.log('⚠️ thanks_settings table does not exist, cannot save settings');
+      await connection.end();
+      return res.status(500).json({
+        success: false,
+        error: 'Thanks settings table not found. Please run database migration.'
+      });
+    }
+
+    // Check if settings exist
+    const [existingRows] = await connection.query(
+      'SELECT id FROM thanks_settings LIMIT 1'
+    );
+
+    if (existingRows.length > 0) {
+      // Update existing settings
+      await connection.query(`
+        UPDATE thanks_settings SET
+          header_title = ?,
+          header_subtitle = ?,
+          main_message = ?,
+          sub_message = ?,
+          couple_names = ?,
+          blessing_quote_arabic = ?,
+          blessing_quote_translation = ?,
+          background_image = ?,
+          show_social_media = ?,
+          social_media_instagram = ?,
+          social_media_facebook = ?,
+          social_media_twitter = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [
+        headerTitle, headerSubtitle, mainMessage, subMessage, coupleNames,
+        blessingQuoteArabic, blessingQuoteTranslation, backgroundImage,
+        showSocialMedia, socialMediaInstagram, socialMediaFacebook, socialMediaTwitter,
+        existingRows[0].id
+      ]);
+
+      console.log('✅ Thanks settings updated successfully');
+    } else {
+      // Insert new settings
+      await connection.query(`
+        INSERT INTO thanks_settings (
+          header_title, header_subtitle, main_message, sub_message, couple_names,
+          blessing_quote_arabic, blessing_quote_translation, background_image,
+          show_social_media, social_media_instagram, social_media_facebook, social_media_twitter,
+          created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        headerTitle, headerSubtitle, mainMessage, subMessage, coupleNames,
+        blessingQuoteArabic, blessingQuoteTranslation, backgroundImage,
+        showSocialMedia, socialMediaInstagram, socialMediaFacebook, socialMediaTwitter,
+        req.user.userId
+      ]);
+
+      console.log('✅ Thanks settings created successfully');
+    }
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      message: 'Thanks settings saved successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error saving thanks settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save thanks settings'
+    });
   }
 });
 
@@ -899,6 +1263,156 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// Bride Groom Management endpoints
+app.get('/api/bride-groom', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get bride groom data from couple_settings table
+    const [rows] = await connection.query(`
+      SELECT * FROM couple_settings
+      WHERE wedding_id = 1 AND is_active = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (rows.length > 0) {
+      res.json({ success: true, data: rows[0] });
+    } else {
+      // Return default structure if no data found
+      res.json({
+        success: true,
+        data: {
+          groom_first_name: '',
+          groom_last_name: '',
+          groom_full_name: '',
+          groom_parent_names: '',
+          bride_first_name: '',
+          bride_last_name: '',
+          bride_full_name: '',
+          bride_parent_names: ''
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching bride groom data:', error);
+    res.status(500).json({ error: 'Failed to fetch bride groom data' });
+  }
+});
+
+app.put('/api/bride-groom/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      groomFirstName, groomLastName, groomFullName, groomParentNames,
+      brideFirstName, brideLastName, brideFullName, brideParentNames
+    } = req.body;
+
+    console.log('🔍 Bride Groom Update Request:');
+    console.log('   ID:', id);
+    console.log('   Groom:', { groomFirstName, groomLastName, groomFullName, groomParentNames });
+    console.log('   Bride:', { brideFirstName, brideLastName, brideFullName, brideParentNames });
+    console.log('   🔐 Token validation passed');
+
+    // Validate required fields
+    if (!groomFirstName || !brideFirstName) {
+      return res.status(400).json({ error: 'Groom and bride first names are required' });
+    }
+
+    const connection = await getConnection();
+
+    // Check if record exists
+    const [existing] = await connection.query(`
+      SELECT id FROM couple_settings WHERE wedding_id = ? AND is_active = TRUE
+    `, [id]);
+
+    if (existing.length > 0) {
+      // Update existing record
+      console.log('   📝 Updating existing record...');
+      await connection.query(`
+        UPDATE couple_settings SET
+          groom_first_name = ?, groom_last_name = ?, groom_full_name = ?, groom_parent_names = ?,
+          bride_first_name = ?, bride_last_name = ?, bride_full_name = ?, bride_parent_names = ?,
+          updated_at = NOW()
+        WHERE wedding_id = ? AND is_active = TRUE
+      `, [
+        groomFirstName, groomLastName, groomFullName, groomParentNames,
+        brideFirstName, brideLastName, brideFullName, brideParentNames,
+        id
+      ]);
+    } else {
+      // Insert new record
+      console.log('   ➕ Creating new record...');
+      await connection.query(`
+        INSERT INTO couple_settings (
+          wedding_id, groom_first_name, groom_last_name, groom_full_name, groom_parent_names,
+          bride_first_name, bride_last_name, bride_full_name, bride_parent_names,
+          groom_photo, bride_photo, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id, groomFirstName, groomLastName, groomFullName, groomParentNames,
+        brideFirstName, brideLastName, brideFullName, brideParentNames,
+        'public/images/BrideGroom/groom.jpg', 'public/images/BrideGroom/bride.jpg', 1
+      ]);
+    }
+
+    await connection.end();
+
+    console.log('   ✅ Bride groom data saved successfully');
+    const response = { success: true, message: 'Bride groom data updated successfully' };
+    console.log('   📤 Sending response:', response);
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error updating bride groom data:', error);
+    console.error('   Error details:', error.message);
+    console.error('   Stack trace:', error.stack);
+    res.status(500).json({
+      error: 'Failed to update bride groom data',
+      details: error.message
+    });
+  }
+});
+
+// Global error handler for multer and other errors
+app.use((error, req, res, next) => {
+  console.error('❌ Global error handler:', error);
+
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'Unexpected field name. Use "image" field.' });
+    }
+    if (error.code === 'LIMIT_PART_COUNT') {
+      return res.status(400).json({ error: 'Too many parts in multipart data.' });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files.' });
+    }
+    if (error.code === 'LIMIT_FIELD_KEY') {
+      return res.status(400).json({ error: 'Field name too long.' });
+    }
+    if (error.code === 'LIMIT_FIELD_VALUE') {
+      return res.status(400).json({ error: 'Field value too long.' });
+    }
+    if (error.code === 'LIMIT_FIELD_COUNT') {
+      return res.status(400).json({ error: 'Too many fields.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${error.message}` });
+  }
+
+  if (error.message && error.message.includes('Only image files are allowed')) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  // Default error response
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Wedding Invitation API Server with Authentication running on http://localhost:${PORT}`);
@@ -911,4 +1425,6 @@ app.listen(PORT, () => {
   console.log('\n🔐 Default Admin Credentials:');
   console.log('   Username: admin');
   console.log('   Password: admin');
+  console.log('\n🔄 Server running with NODEMON - Auto-restart enabled!');
+  console.log('💡 Edit any file in backend/ or src/ to see auto-restart in action!');
 });

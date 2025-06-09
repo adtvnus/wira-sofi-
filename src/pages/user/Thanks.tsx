@@ -1,9 +1,51 @@
 
+import React, { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 
 const Thanks = () => {
   const { weddingData } = useWedding();
-  const { thanksSettings } = weddingData;
+  const { thanksSettings, couple } = weddingData;
+  const [apiThanksSettings, setApiThanksSettings] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load thanks settings from API
+  useEffect(() => {
+    loadThanksSettings();
+  }, []);
+
+  const loadThanksSettings = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+      const response = await fetch(`${API_BASE_URL}/thanks-settings`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setApiThanksSettings(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading thanks settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Use API data if available, fallback to context data
+  const currentSettings = apiThanksSettings || thanksSettings;
+
+  // Generate couple names from weddingData.couple (same as Opening.tsx)
+  const getCoupleNames = () => {
+    if (couple.groomFirstName && couple.brideFirstName) {
+      return `${couple.groomFirstName} & ${couple.brideFirstName}`;
+    }
+    return currentSettings.coupleNames || 'Wira & Sofi';
+  };
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden"
@@ -106,7 +148,7 @@ const Thanks = () => {
               textShadow: "0 4px 12px rgba(100, 79, 68, 0.1)",
             }}
           >
-            {thanksSettings.headerTitle || "Thank You"}
+            {currentSettings.headerTitle || "Thank You"}
           </h1>
 
           {/* Subtitle */}
@@ -114,7 +156,7 @@ const Thanks = () => {
             className="text-3xl md:text-4xl font-light mb-12 tracking-wide opacity-80"
             style={{ color: "#644F44" }}
           >
-            {thanksSettings.headerSubtitle || "Terima Kasih"}
+            {currentSettings.headerSubtitle || "Terima Kasih"}
           </h2>
           
           {/* Decorative separator */}
@@ -141,27 +183,28 @@ const Thanks = () => {
                 className="text-lg md:text-xl leading-relaxed mb-6 font-light"
                 style={{ color: "#644F44" }}
               >
-                {thanksSettings.mainMessage || "Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya."}
+                {currentSettings.mainMessage || "Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya."}
               </p>
               
               <p
                 className="text-base md:text-lg leading-relaxed opacity-80 italic"
                 style={{ color: "#644F44" }}
               >
-                {thanksSettings.subMessage || "Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua."}
+                {currentSettings.subMessage || "Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua."}
               </p>
               
               {/* Signature area */}
               <div className="mt-10 pt-8 border-t border-amber-200/50">
                 <div className="flex items-center justify-center space-x-4">
-                  {thanksSettings.coupleNames ? (
-                    thanksSettings.coupleNames.includes('&') ? (
+                  {(() => {
+                    const coupleNames = getCoupleNames();
+                    return coupleNames.includes('&') ? (
                       <>
                         <span
                           className="text-2xl md:text-3xl font-light tracking-wider"
                           style={{ color: "#644F44" }}
                         >
-                          {thanksSettings.coupleNames.split('&')[0].trim()}
+                          {coupleNames.split('&')[0].trim()}
                         </span>
                         <span
                           className="text-xl opacity-60"
@@ -173,7 +216,7 @@ const Thanks = () => {
                           className="text-2xl md:text-3xl font-light tracking-wider"
                           style={{ color: "#644F44" }}
                         >
-                          {thanksSettings.coupleNames.split('&')[1].trim()}
+                          {coupleNames.split('&')[1].trim()}
                         </span>
                       </>
                     ) : (
@@ -181,31 +224,10 @@ const Thanks = () => {
                         className="text-2xl md:text-3xl font-light tracking-wider"
                         style={{ color: "#644F44" }}
                       >
-                        {thanksSettings.coupleNames}
+                        {coupleNames}
                       </span>
-                    )
-                  ) : (
-                    <>
-                      <span
-                        className="text-2xl md:text-3xl font-light tracking-wider"
-                        style={{ color: "#644F44" }}
-                      >
-                        Wira
-                      </span>
-                      <span
-                        className="text-xl opacity-60"
-                        style={{ color: "#644F44" }}
-                      >
-                        &
-                      </span>
-                      <span
-                        className="text-2xl md:text-3xl font-light tracking-wider"
-                        style={{ color: "#644F44" }}
-                      >
-                        Sofi
-                      </span>
-                    </>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -215,27 +237,6 @@ const Thanks = () => {
             <div className="absolute -bottom-4 -right-4 w-6 h-6 bg-gradient-to-br from-rose-300 to-pink-300 rounded-full opacity-50"></div>
             <div className="absolute top-1/2 -left-2 w-4 h-4 bg-gradient-to-br from-yellow-300 to-amber-300 rounded-full opacity-35"></div>
             <div className="absolute top-1/4 -right-2 w-5 h-5 bg-gradient-to-br from-pink-300 to-rose-300 rounded-full opacity-40"></div>
-          </div>
-        </div>
-
-        {/* Bottom Blessing Quote */}
-        <div className="animate-fade-in-delayed">
-          <div className="relative inline-block">
-            <div className="absolute inset-0 bg-gradient-to-r from-amber-100/30 via-orange-100/40 to-rose-100/30 backdrop-blur-sm rounded-2xl"></div>
-            <div className="relative z-10 px-8 py-6">
-              <p
-                className="text-base md:text-lg italic font-light leading-relaxed"
-                style={{ color: "#644F44" }}
-              >
-                "{thanksSettings.blessingQuoteArabic || "Barakallahu lakuma wa baraka alaikuma wa jama'a bainakuma fi khair"}"
-              </p>
-              <p
-                className="text-sm mt-2 opacity-70"
-                style={{ color: "#644F44" }}
-              >
-                {thanksSettings.blessingQuoteTranslation || "Semoga Allah memberkati kalian dan menyatukan kalian dalam kebaikan"}
-              </p>
-            </div>
           </div>
         </div>
 

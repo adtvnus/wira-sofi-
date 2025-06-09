@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "backend": "node backend/server.cjs",
+    "backend:dev": "nodemon",
+    "backend:watch": "nodemon backend/server.cjs",
     "setup-db": "node backend/database/setup.cjs",
     "seed-db": "node backend/database/seeder.cjs",
     "create-db": "node backend/database/create.cjs",
@@ -18,7 +20,8 @@
     "sample-data": "node backend/database/add-sample-data.cjs",
     "add-samples": "node backend/scripts/add-sample-data.cjs",
     "check-db": "node backend/scripts/check-consistency.cjs",
-    "start-full": "concurrently \"npm run backend\" \"npm run dev\"",
+    "start-full": "concurrently \"npm run backend:dev\" \"npm run dev\"",
+    "start-full-watch": "concurrently \"npm run backend:dev\" \"npm run dev\"",
     "organize": "node scripts/organize-files.cjs"
   },
   "dependencies": {
@@ -47,6 +50,7 @@
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.4.1",
+    "sqlite3": "^5.1.7",
     "tailwind-merge": "^3.1.0",
     "tailwindcss": "^4.1.0"
   },
@@ -60,6 +64,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
+    "nodemon": "^3.1.10",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.24.1",
     "vite": "^6.2.0"

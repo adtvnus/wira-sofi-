@@ -216,5 +216,41 @@ LEFT JOIN wedding_guests g ON w.id = g.wedding_id AND g.is_active = TRUE
 WHERE w.is_active = TRUE
 GROUP BY w.id;
 
+-- 10. Thanks Settings Table
+CREATE TABLE IF NOT EXISTS thanks_settings (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  header_title VARCHAR(255) DEFAULT 'Thank You',
+  header_subtitle VARCHAR(255) DEFAULT 'Terima Kasih',
+  main_message TEXT DEFAULT 'Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya.',
+  sub_message TEXT DEFAULT 'Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua.',
+  couple_names VARCHAR(255) DEFAULT 'Wira & Sofi',
+  blessing_quote_arabic TEXT DEFAULT 'Barakallahu lakuma wa baraka alaikuma wa jama\'a bainakuma fi khair',
+  blessing_quote_translation TEXT DEFAULT 'Semoga Allah memberkati kalian dan menyatukan kalian dalam kebaikan',
+  background_image VARCHAR(500) DEFAULT '',
+  show_social_media BOOLEAN DEFAULT FALSE,
+  social_media_instagram VARCHAR(255) DEFAULT '',
+  social_media_facebook VARCHAR(255) DEFAULT '',
+  social_media_twitter VARCHAR(255) DEFAULT '',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES admin_users(id)
+);
+
+-- Insert default thanks settings
+INSERT INTO thanks_settings (
+  header_title, header_subtitle, main_message, sub_message, couple_names,
+  blessing_quote_arabic, blessing_quote_translation, created_by
+) VALUES (
+  'Thank You', 'Terima Kasih',
+  'Atas kehadiran, doa, dan restu yang telah diberikan dalam hari bahagia kami, kami mengucapkan terima kasih yang sebesar-besarnya.',
+  'Semoga keberkahan dan kebahagiaan senantiasa menyertai kita semua.',
+  'Wira & Sofi',
+  'Barakallahu lakuma wa baraka alaikuma wa jama\'a bainakuma fi khair',
+  'Semoga Allah memberkati kalian dan menyatukan kalian dalam kebaikan',
+  1
+);
+
 -- Show created tables
 SHOW TABLES;

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Upload</title>
+</head>
+<body>
+    <h1>Test Image Upload</h1>
+    
+    <form id="uploadForm">
+        <input type="file" id="imageFile" accept="image/*" required>
+        <button type="submit">Upload</button>
+    </form>
+    
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('imageFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            console.log('🔍 File selected:', {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            // Get token from localStorage (if available)
+            const token = localStorage.getItem('authToken') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJpYXQiOjE3NDkzODY1OTIsImV4cCI6MTc0OTQ3Mjk5Mn0.cYbQnD-Y6-sAnE8F8Ixorj8OdlWS-x-ngrLK2lLl8xuE';
+            
+            console.log('🔍 Uploading to:', 'http://localhost:3001/api/quotes/upload-image');
+            console.log('🔍 Token:', token.substring(0, 50) + '...');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/quotes/upload-image', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                console.log('🔍 Response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok
+                });
+                
+                const result = await response.json();
+                console.log('🔍 Result:', result);
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Response:</h3>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('result').innerHTML = `
+                    <h3>Error:</h3>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -27,19 +27,20 @@ interface WeddingContextType {
 
 const WeddingContext = createContext<WeddingContextType | undefined>(undefined);
 
-// Default wedding data
+// Default wedding data - NOW SERVES AS FALLBACK/TEMPLATE ONLY
+// Actual content should be loaded from database via CRUD system
 const defaultWeddingData: WeddingSettings = {
   couple: {
-    groomFirstName: "Wira",
-    groomLastName: "Maulana",
-    groomFullName: "Wira Maulana",
-    groomParentNames: "Bapak Ahmad & Ibu Siti",
-    groomPhoto: "public/images/BrideGroom/groom.jpg",
-    brideFirstName: "Sofi",
-    brideLastName: "Kumala",
-    brideFullName: "Sofi Kumala",
-    brideParentNames: "Bapak Budi & Ibu Rina",
-    bridePhoto: "public/images/BrideGroom/bride.jpg",
+    groomFirstName: "Pengantin Pria", // Fallback only
+    groomLastName: "",
+    groomFullName: "Pengantin Pria",
+    groomParentNames: "Orang Tua Pengantin Pria",
+    groomPhoto: "public/images/BrideGroom/groom.jpg", // Default image path
+    brideFirstName: "Pengantin Wanita", // Fallback only
+    brideLastName: "",
+    brideFullName: "Pengantin Wanita",
+    brideParentNames: "Orang Tua Pengantin Wanita",
+    bridePhoto: "public/images/BrideGroom/bride.jpg", // Default image path
   },
   events: [
     {
@@ -468,11 +469,13 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
             groomFirstName: dbData.groom_first_name || '',
             groomLastName: dbData.groom_full_name?.split(' ').slice(-1)[0] || '',
             groomFullName: dbData.groom_full_name || '',
-            groomParents: dbData.groom_parents || '',
+            groomParentNames: dbData.groom_parents || '',
+            groomPhoto: defaultWeddingData.couple.groomPhoto,
             brideFirstName: dbData.bride_first_name || '',
             brideLastName: dbData.bride_full_name?.split(' ').slice(-1)[0] || '',
             brideFullName: dbData.bride_full_name || '',
-            brideParents: dbData.bride_parents || ''
+            brideParentNames: dbData.bride_parents || '',
+            bridePhoto: defaultWeddingData.couple.bridePhoto
           },
           events: [
             {
