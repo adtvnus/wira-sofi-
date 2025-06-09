@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 
 const Thanks = () => {
@@ -46,6 +46,25 @@ const Thanks = () => {
     }
     return currentSettings.coupleNames || 'Wira & Sofi';
   };
+
+  // Show loading state while fetching data
+  if (isLoading) {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
+        style={{
+          background: "linear-gradient(135deg, #f8f6f3 0%, #f1ede8 50%, #ede7e0 100%)",
+          fontFamily: "Ovo, serif",
+        }}
+      >
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
+          <p className="text-lg text-amber-800 opacity-70">Loading thanks page...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden"
