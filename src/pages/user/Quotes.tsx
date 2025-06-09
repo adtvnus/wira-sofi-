@@ -1,22 +1,49 @@
 import { useState, useEffect } from "react";
-import { useWedding } from "../../contexts/WeddingContext";
+
+interface Quote {
+  id: number;
+  quote_text: string;
+  quote_author: string;
+  quote_category: string;
+  quote_image_url: string;
+  display_order: number;
+  created_at: string;
+}
 
 const Quotes = () => {
-  const { weddingData, isLoading } = useWedding();
-  const [currentQuote, setCurrentQuote] = useState(0);
+  const [activeQuote, setActiveQuote] = useState<Quote | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get active quotes
-  const activeQuotes = weddingData.quotesSettings.quotes.filter(quote => quote.isActive);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-  // Auto-rotate quotes every 5 seconds if there are multiple quotes
+  // Fetch active quote from database
   useEffect(() => {
-    if (activeQuotes.length > 1) {
-      const interval = setInterval(() => {
-        setCurrentQuote(prev => (prev + 1) % activeQuotes.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [activeQuotes.length]);
+    const fetchActiveQuote = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`${API_BASE_URL}/quotes/active`);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setActiveQuote(data.data);
+          } else {
+            setError(data.message || 'No active quote found');
+          }
+        } else {
+          throw new Error('Failed to fetch quote');
+        }
+      } catch (error) {
+        console.error('Error fetching active quote:', error);
+        setError('Failed to load quote');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchActiveQuote();
+  }, []);
 
   if (isLoading) {
     return (
@@ -29,12 +56,23 @@ const Quotes = () => {
     );
   }
 
-  // If no active quotes, show default message
-  if (activeQuotes.length === 0) {
+  // If error or no active quote, show message
+  if (error || !activeQuote) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p style={{ color: "#644F44" }}>No quotes available</p>
+          <div className="mb-6">
+            <i className="fas fa-quote-left text-6xl text-amber-300 opacity-50"></i>
+          </div>
+          <h2 className="text-2xl font-light mb-4" style={{ color: "#644F44" }}>
+            No Quote Available
+          </h2>
+          <p className="text-gray-600 mb-6">
+            {error || 'No quote has been activated yet.'}
+          </p>
+          <p className="text-sm text-gray-500">
+            Please check back later or contact the administrator.
+          </p>
         </div>
       </div>
     );
@@ -89,14 +127,14 @@ const Quotes = () => {
             className="text-3xl md:text-4xl font-light mb-4 tracking-wider"
             style={{ color: "#644F44" }}
           >
-            {weddingData.quotesSettings.headerTitle}
+            Words of Love
           </h2>
 
           <p
             className="text-sm tracking-wide opacity-70"
             style={{ color: "#644F44" }}
           >
-            {weddingData.quotesSettings.headerSubtitle}
+            Kata-kata indah tentang cinta dan pernikahan
           </p>
         </div>
 
@@ -109,11 +147,20 @@ const Quotes = () => {
               <div className="absolute inset-0 bg-gradient-to-br from-amber-100/30 via-transparent to-rose-100/30 z-10 rounded-2xl"></div>
               <div className="absolute -inset-1 bg-gradient-to-br from-amber-200 via-orange-200 to-rose-200 rounded-2xl blur-sm opacity-50"></div>
               
-              <img
-                src={weddingData.quotesSettings.quotesImage}
-                alt="Wedding Quotes"
-                className="relative z-10 w-full h-80 md:h-96 object-cover rounded-2xl"
-              />
+              {activeQuote.quote_image_url ? (
+                <img
+                  src={activeQuote.quote_image_url}
+                  alt="Wedding Quote"
+                  className="relative z-10 w-full h-80 md:h-96 object-cover rounded-2xl"
+                />
+              ) : (
+                <div className="relative z-10 w-full h-80 md:h-96 bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 rounded-2xl flex items-center justify-center">
+                  <div className="text-center">
+                    <i className="fas fa-quote-left text-6xl text-amber-400 opacity-50 mb-4"></i>
+                    <p className="text-amber-700 font-medium">Quote Image</p>
+                  </div>
+                </div>
+              )}
               
               {/* Overlay decorations */}
               <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-white/50 z-20"></div>
@@ -144,22 +191,34 @@ const Quotes = () => {
                 </div>
                 
                 {/* Quote text */}
-                <blockquote 
+                <blockquote
                   className="text-lg md:text-xl leading-relaxed mb-6 italic"
                   style={{ color: "#644F44" }}
                 >
-                  {activeQuotes[currentQuote].text}
+                  {activeQuote.quote_text}
                 </blockquote>
-                
+
                 {/* Author */}
                 <div className="flex items-center">
                   <div className="w-8 h-px bg-gradient-to-r from-amber-300 to-transparent mr-4"></div>
-                  <cite 
+                  <cite
                     className="text-sm font-medium not-italic tracking-wide"
                     style={{ color: "#644F44" }}
                   >
-                    {activeQuotes[currentQuote].author}
+                    — {activeQuote.quote_author || 'Unknown'}
                   </cite>
+                </div>
+
+                {/* Category Badge */}
+                <div className="mt-4">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                    activeQuote.quote_category === 'love' ? 'bg-red-100 text-red-800' :
+                    activeQuote.quote_category === 'marriage' ? 'bg-blue-100 text-blue-800' :
+                    activeQuote.quote_category === 'blessing' ? 'bg-green-100 text-green-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {activeQuote.quote_category}
+                  </span>
                 </div>
               </div>
             </div>
@@ -184,7 +243,7 @@ const Quotes = () => {
             className="text-sm opacity-60 tracking-wider"
             style={{ color: "#644F44" }}
           >
-            {weddingData.quotesSettings.bottomMessage}
+            Semoga kata-kata ini memberikan inspirasi dan keberkahan
           </p>
         </div>
       </div>

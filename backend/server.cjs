@@ -81,7 +81,7 @@ const upload = multer({
 // Specific multer configuration for quotes images
 const quotesStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const quotesPath = path.join(__dirname, '../public/images/quotes');
+    const quotesPath = path.join(__dirname, '../public/images/QuotesDatabase');
     if (!fs.existsSync(quotesPath)) {
       fs.mkdirSync(quotesPath, { recursive: true });
     }
@@ -872,10 +872,15 @@ app.post('/api/quotes', authenticateToken, async (req, res) => {
 
     const [result] = await connection.query(`
       INSERT INTO quotes_settings (
-        wedding_id, header_title, header_subtitle, bottom_message,
-        quotes_image, is_active, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
-    `, [weddingId, quoteText, quoteAuthor || '', quoteCategory || '', quoteImage || '', req.user.id]);
+        wedding_id, quote_text, quote_author, quote_category, quote_image_url,
+        display_order, is_active, created_by, created_at, updated_at,
+        header_title, header_subtitle, bottom_message, quotes_image
+      ) VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW(), ?, ?, ?, ?)
+    `, [
+      weddingId, quoteText, quoteAuthor || '', quoteCategory || 'general', quoteImage || '',
+      displayOrder || 0, req.user.id,
+      'Words of Love', 'Kata-kata indah tentang cinta dan pernikahan', quoteCategory || 'general', quoteImage || ''
+    ]);
 
     // Get the inserted quote settings
     const [newQuote] = await connection.query(`
@@ -913,10 +918,14 @@ app.put('/api/quotes/:id', authenticateToken, async (req, res) => {
 
     await connection.query(`
       UPDATE quotes_settings
-      SET header_title = ?, header_subtitle = ?, bottom_message = ?,
-          quotes_image = ?, is_active = ?, updated_at = NOW()
+      SET quote_text = ?, quote_author = ?, quote_category = ?, quote_image_url = ?,
+          display_order = ?, is_active = ?, updated_at = NOW(),
+          header_title = ?, header_subtitle = ?, bottom_message = ?, quotes_image = ?
       WHERE id = ?
-    `, [quoteText, quoteAuthor, quoteCategory, quoteImage, isActive, id]);
+    `, [
+      quoteText, quoteAuthor, quoteCategory, quoteImage, displayOrder || 0, isActive,
+      'Words of Love', quoteAuthor || '', quoteCategory || 'general', quoteImage || '', id
+    ]);
 
     // Get updated quote settings
     const [updatedQuote] = await connection.query(`
@@ -970,6 +979,49 @@ app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Get active quote for public display (no auth required)
+app.get('/api/quotes/active', async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    const [quotes] = await connection.query(`
+      SELECT
+        qs.id,
+        qs.quote_text,
+        qs.quote_author,
+        qs.quote_category,
+        qs.quote_image_url,
+        qs.display_order,
+        qs.created_at
+      FROM quotes_settings qs
+      WHERE qs.is_active = TRUE
+      ORDER BY qs.display_order ASC, qs.created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (quotes.length === 0) {
+      res.json({
+        success: true,
+        data: null,
+        message: 'No active quote found'
+      });
+    } else {
+      res.json({
+        success: true,
+        data: quotes[0]
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching active quote:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch active quote'
+    });
+  }
+});
+
 // Quotes Image Upload endpoint
 app.post('/api/quotes/upload-image', authenticateToken, (req, res, next) => {
   console.log('🔍 Upload request received:', {
@@ -993,7 +1045,7 @@ app.post('/api/quotes/upload-image', authenticateToken, (req, res, next) => {
     }
 
     // Generate the public URL for the uploaded image
-    const imageUrl = `/images/quotes/${req.file.filename}`;
+    const imageUrl = `/images/QuotesDatabase/${req.file.filename}`;
 
     console.log('📁 Quote image uploaded successfully:', {
       originalName: req.file.originalname,

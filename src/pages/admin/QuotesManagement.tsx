@@ -36,6 +36,9 @@ const QuotesManagement = () => {
     display_order: 0
   });
 
+  // Count active quotes
+  const activeQuotesCount = quotes.filter(quote => quote.is_active).length;
+
   // Load quotes from MySQL
   useEffect(() => {
     loadQuotes();
@@ -131,6 +134,90 @@ const QuotesManagement = () => {
     }
   };
 
+  const toggleQuoteStatus = async (id: number, newStatus: boolean) => {
+    // If activating a quote, confirm deactivating others
+    if (newStatus) {
+      const activeQuotes = quotes.filter(q => q.is_active && q.id !== id);
+      if (activeQuotes.length > 0) {
+        const confirmMessage = `Mengaktifkan quote ini akan menonaktifkan ${activeQuotes.length} quote lainnya. Hanya satu quote yang bisa aktif pada satu waktu. Lanjutkan?`;
+        if (!window.confirm(confirmMessage)) {
+          return;
+        }
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      // If activating this quote, first deactivate all others
+      if (newStatus) {
+        const deactivatePromises = quotes
+          .filter(q => q.is_active && q.id !== id)
+          .map(quote =>
+            fetch(`${API_BASE_URL}/quotes/${quote.id}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                quoteText: quote.quote_text,
+                quoteAuthor: quote.quote_author,
+                quoteCategory: quote.quote_category,
+                quoteImage: quote.quote_image_url,
+                displayOrder: quote.display_order,
+                isActive: false
+              }),
+            })
+          );
+
+        await Promise.all(deactivatePromises);
+      }
+
+      // Find the quote to get current data
+      const currentQuote = quotes.find(q => q.id === id);
+      if (!currentQuote) {
+        throw new Error('Quote not found');
+      }
+
+      // Now update the target quote
+      const response = await fetch(`${API_BASE_URL}/quotes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quoteText: currentQuote.quote_text,
+          quoteAuthor: currentQuote.quote_author,
+          quoteCategory: currentQuote.quote_category,
+          quoteImage: currentQuote.quote_image_url,
+          displayOrder: currentQuote.display_order,
+          isActive: newStatus
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          if (newStatus) {
+            setMessage(`✅ Quote diaktifkan! Quote lainnya telah dinonaktifkan.`);
+          } else {
+            setMessage(`✅ Quote dinonaktifkan!`);
+          }
+          loadQuotes();
+        }
+      } else {
+        throw new Error('Failed to toggle quote status');
+      }
+    } catch (error) {
+      console.error('Error toggling quote status:', error);
+      setMessage('❌ Gagal mengubah status quote');
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
   const updateQuote = async () => {
     if (!editingQuote || !editingQuote.quote_text.trim()) {
       setMessage('❌ Teks quote wajib diisi');
@@ -207,88 +294,7 @@ const QuotesManagement = () => {
     }
   };
 
-  const toggleQuoteStatus = async (id: number, newStatus: boolean) => {
-    setIsSubmitting(true);
-    try {
-      // Find the quote to get current data
-      const currentQuote = quotes.find(q => q.id === id);
-      if (!currentQuote) {
-        throw new Error('Quote not found');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/quotes/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          quoteText: currentQuote.quote_text,
-          quoteAuthor: currentQuote.quote_author,
-          quoteCategory: currentQuote.quote_category,
-          quoteImage: currentQuote.quote_image_url,
-          displayOrder: currentQuote.display_order,
-          isActive: newStatus
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setMessage(`✅ Quote ${newStatus ? 'diaktifkan' : 'dinonaktifkan'}!`);
-          loadQuotes();
-        }
-      } else {
-        throw new Error('Failed to toggle quote status');
-      }
-    } catch (error) {
-      console.error('Error toggling quote status:', error);
-      setMessage('❌ Gagal mengubah status quote');
-    } finally {
-      setIsSubmitting(false);
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
-  const bulkToggleStatus = async (newStatus: boolean) => {
-    const action = newStatus ? 'mengaktifkan' : 'menonaktifkan';
-    if (!window.confirm(`Apakah Anda yakin ingin ${action} semua quotes?`)) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const promises = quotes.map(quote =>
-        fetch(`${API_BASE_URL}/quotes/${quote.id}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            quoteText: quote.quote_text,
-            quoteAuthor: quote.quote_author,
-            quoteCategory: quote.quote_category,
-            quoteImage: quote.quote_image_url,
-            displayOrder: quote.display_order,
-            isActive: newStatus
-          }),
-        })
-      );
-
-      await Promise.all(promises);
-      setMessage(`✅ Semua quotes berhasil ${newStatus ? 'diaktifkan' : 'dinonaktifkan'}!`);
-      loadQuotes();
-    } catch (error) {
-      console.error('Error bulk toggling quotes:', error);
-      setMessage('❌ Gagal mengubah status quotes');
-    } finally {
-      setIsSubmitting(false);
-      setTimeout(() => setMessage(''), 5000);
-    }
-  };
-
-  // File validation function (same as Gallery Management)
+  // File validation function
   const validateFile = (file: File): string | null => {
     const maxSize = 5 * 1024 * 1024; // 5MB
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -304,59 +310,49 @@ const QuotesManagement = () => {
     return null;
   };
 
-  // Convert file to base64 (same as Gallery Management)
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Handle image upload for quotes (LOCAL PROCESSING ONLY)
+  // Handle image upload for quotes
   const handleImageUpload = async (file: File, type: 'new' | 'edit') => {
     setUploading(true);
 
     try {
-      console.log(`🖼️ Processing quote image upload:`, {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        uploadType: type
-      });
-
       const validationError = validateFile(file);
       if (validationError) {
-        console.log('❌ Validation failed:', validationError);
         setMessage(`❌ ${validationError}`);
         setTimeout(() => setMessage(''), 5000);
         return;
       }
 
-      console.log('✅ File validation passed, converting to base64...');
+      // Upload to server
+      const formData = new FormData();
+      formData.append('image', file);
 
-      // Convert to base64 for preview (NO API CALL)
-      const base64 = await fileToBase64(file);
+      const response = await fetch(`${API_BASE_URL}/quotes/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-      console.log('✅ Base64 conversion completed, updating form data...');
+      if (response.ok) {
+        const data = await response.json();
+        const imageUrl = data.url;
 
-      // Update form data with new image (LOCAL STATE ONLY)
-      if (type === 'new') {
-        setNewQuote(prev => ({ ...prev, quote_image_url: base64 }));
-        console.log('✅ New quote image updated in form data');
-      } else if (editingQuote) {
-        setEditingQuote(prev => prev ? ({ ...prev, quote_image_url: base64 }) : null);
-        console.log('✅ Edit quote image updated in form data');
+        // Update form data with new image URL
+        if (type === 'new') {
+          setNewQuote(prev => ({ ...prev, quote_image_url: imageUrl }));
+        } else if (editingQuote) {
+          setEditingQuote(prev => prev ? ({ ...prev, quote_image_url: imageUrl }) : null);
+        }
+
+        setMessage('✅ Gambar quote berhasil diupload!');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        throw new Error('Upload failed');
       }
-
-      setMessage('✅ Gambar quote berhasil diupload!');
-      setTimeout(() => setMessage(''), 3000);
-
     } catch (error) {
-      console.error('❌ Error processing image:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setMessage(`❌ Gagal mengupload gambar: ${errorMessage}`);
+      console.error('Error uploading image:', error);
+      setMessage(`❌ Gagal mengupload gambar`);
       setTimeout(() => setMessage(''), 5000);
     } finally {
       setUploading(false);
@@ -383,6 +379,13 @@ const QuotesManagement = () => {
       handleImageUpload(files[0], type);
     }
   };
+
+  // Filter quotes based on status
+  const filteredQuotes = quotes.filter(quote => {
+    if (statusFilter === 'active') return quote.is_active;
+    if (statusFilter === 'inactive') return !quote.is_active;
+    return true; // 'all'
+  });
 
   if (isLoading) {
     return (
@@ -411,7 +414,7 @@ const QuotesManagement = () => {
                 <i className="fas fa-quote-left text-amber-600 text-3xl mr-4"></i>
                 <div>
                   <h1 className="text-3xl font-bold text-amber-800">Quotes Management</h1>
-                  <p className="text-amber-700 mt-1">Manage wedding quotes with photo uploads</p>
+                  <p className="text-amber-700 mt-1">Manage wedding quotes - Only ONE can be active at a time</p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -421,12 +424,19 @@ const QuotesManagement = () => {
                 <span className="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
                   {quotes.length} Total
                 </span>
-                <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
-                  {quotes.filter(q => q.is_active).length} Active
-                </span>
-                <span className="px-3 py-1 rounded-full text-sm bg-red-100 text-red-800">
-                  {quotes.filter(q => !q.is_active).length} Inactive
-                </span>
+                {activeQuotesCount === 1 ? (
+                  <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
+                    ✅ 1 Active
+                  </span>
+                ) : activeQuotesCount === 0 ? (
+                  <span className="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800">
+                    ⚠️ No Active Quote
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-sm bg-red-100 text-red-800">
+                    ❌ {activeQuotesCount} Active (Should be 1)
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -458,13 +468,6 @@ const QuotesManagement = () => {
                   <i className="fas fa-plus text-amber-600 mr-3"></i>
                   Add New Quote
                 </h2>
-                {/* Debug Info */}
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    <i className="fas fa-info-circle mr-2"></i>
-                    <strong>Debug:</strong> Add New Quote form is visible. ImageUpload should appear below.
-                  </p>
-                </div>
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -475,8 +478,8 @@ const QuotesManagement = () => {
                       value={newQuote.quote_text}
                       onChange={handleNewQuoteChange}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Cinta sejati tidak pernah berakhir..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter the quote text..."
                       required
                     />
                   </div>
@@ -489,8 +492,8 @@ const QuotesManagement = () => {
                       name="quote_author"
                       value={newQuote.quote_author}
                       onChange={handleNewQuoteChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Paulo Coelho"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Quote author..."
                     />
                   </div>
                   <div>
@@ -501,7 +504,7 @@ const QuotesManagement = () => {
                       name="quote_category"
                       value={newQuote.quote_category}
                       onChange={handleNewQuoteChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
                       <option value="general">General</option>
                       <option value="love">Love</option>
@@ -518,7 +521,7 @@ const QuotesManagement = () => {
                       name="display_order"
                       value={newQuote.display_order}
                       onChange={handleNewQuoteChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       placeholder="0"
                     />
                   </div>
@@ -583,6 +586,7 @@ const QuotesManagement = () => {
                               Pilih Gambar
                             </div>
                             <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                            <p className="text-xs text-amber-600 mt-1">📁 Saved to: /images/QuotesDatabase</p>
                           </div>
                         )}
                       </label>
@@ -596,7 +600,7 @@ const QuotesManagement = () => {
                       className={`px-6 py-2 rounded-md font-medium text-white ${
                         isSubmitting
                           ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-green-600 hover:bg-green-700'
+                          : 'bg-amber-600 hover:bg-amber-700'
                       } transition-colors duration-200`}
                     >
                       {isSubmitting ? 'Adding...' : 'Add Quote'}
@@ -604,6 +608,162 @@ const QuotesManagement = () => {
                     <button
                       type="button"
                       onClick={() => setShowAddForm(false)}
+                      className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Quote Form */}
+            {editingQuote && (
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-blue-100 mb-6">
+                <h2 className="text-xl font-semibold text-blue-800 mb-6 flex items-center">
+                  <i className="fas fa-edit text-blue-600 mr-3"></i>
+                  Edit Quote (ID: {editingQuote.id})
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Quote Text *
+                    </label>
+                    <textarea
+                      name="quote_text"
+                      value={editingQuote.quote_text}
+                      onChange={handleEditQuoteChange}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter the quote text..."
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Author
+                    </label>
+                    <input
+                      type="text"
+                      name="quote_author"
+                      value={editingQuote.quote_author}
+                      onChange={handleEditQuoteChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Quote author..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category
+                    </label>
+                    <select
+                      name="quote_category"
+                      value={editingQuote.quote_category}
+                      onChange={handleEditQuoteChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="general">General</option>
+                      <option value="love">Love</option>
+                      <option value="marriage">Marriage</option>
+                      <option value="blessing">Blessing</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Display Order
+                    </label>
+                    <input
+                      type="number"
+                      name="display_order"
+                      value={editingQuote.display_order}
+                      onChange={handleEditQuoteChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Quote Image
+                    </label>
+
+                    {/* Current Image Preview */}
+                    {editingQuote.quote_image_url && (
+                      <div className="mb-4">
+                        <img
+                          src={editingQuote.quote_image_url}
+                          alt="Quote Preview"
+                          className="w-32 h-32 object-cover rounded-lg border border-blue-200"
+                        />
+                      </div>
+                    )}
+
+                    {/* Upload Area */}
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
+                        dragOver
+                          ? 'border-blue-400 bg-blue-50'
+                          : uploading
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, 'edit')}
+                    >
+                      <label className="cursor-pointer block">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleImageUpload(e.target.files[0], 'edit');
+                            }
+                          }}
+                          className="hidden"
+                          disabled={uploading}
+                        />
+
+                        {uploading ? (
+                          <div className="flex flex-col items-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                            <p className="text-blue-600 font-medium">Mengupload...</p>
+                          </div>
+                        ) : dragOver ? (
+                          <div className="flex flex-col items-center">
+                            <div className="text-4xl mb-2">📤</div>
+                            <p className="text-blue-700 font-medium">Drop gambar di sini</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <div className="text-4xl mb-2">💬</div>
+                            <p className="text-gray-700 font-medium">Update Gambar Quote</p>
+                            <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
+                            <div className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                              Pilih Gambar Baru
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                            <p className="text-xs text-blue-600 mt-1">📁 Saved to: /images/QuotesDatabase</p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={updateQuote}
+                      disabled={isSubmitting}
+                      className={`px-6 py-2 rounded-md font-medium text-white ${
+                        isSubmitting
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      } transition-colors duration-200`}
+                    >
+                      {isSubmitting ? 'Updating...' : 'Update Quote'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingQuote(null)}
                       className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200"
                     >
                       Cancel
@@ -621,27 +781,27 @@ const QuotesManagement = () => {
                   Existing Quotes
                 </h2>
 
-                {/* Status Filter & Bulk Actions */}
+                {/* Status Info & Actions */}
                 <div className="flex items-center space-x-4">
-                  {/* Quick Actions */}
+                  {/* Active Quote Info */}
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">Quick:</span>
-                    <button
-                      onClick={() => bulkToggleStatus(true)}
-                      className="px-3 py-1 bg-green-100 text-green-700 rounded-md text-sm hover:bg-green-200 transition-colors"
-                      title="Activate all quotes"
-                    >
-                      <i className="fas fa-check mr-1"></i>
-                      All Active
-                    </button>
-                    <button
-                      onClick={() => bulkToggleStatus(false)}
-                      className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm hover:bg-red-200 transition-colors"
-                      title="Deactivate all quotes"
-                    >
-                      <i className="fas fa-times mr-1"></i>
-                      All Inactive
-                    </button>
+                    <span className="text-sm text-gray-600">Active Quote:</span>
+                    {activeQuotesCount === 1 ? (
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-md text-sm">
+                        <i className="fas fa-check mr-1"></i>
+                        1 Quote Active
+                      </span>
+                    ) : activeQuotesCount === 0 ? (
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-md text-sm">
+                        <i className="fas fa-exclamation-triangle mr-1"></i>
+                        No Active Quote
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm">
+                        <i className="fas fa-exclamation mr-1"></i>
+                        {activeQuotesCount} Active (Should be 1)
+                      </span>
+                    )}
                   </div>
 
                   {/* Status Filter */}
@@ -660,259 +820,106 @@ const QuotesManagement = () => {
                 </div>
               </div>
 
-              {(() => {
-                // Filter quotes based on status
-                const filteredQuotes = quotes.filter(quote => {
-                  if (statusFilter === 'active') return quote.is_active;
-                  if (statusFilter === 'inactive') return !quote.is_active;
-                  return true; // 'all'
-                });
-
-                if (filteredQuotes.length === 0) {
-                  return (
-                    <div className="bg-white rounded-lg p-8 text-center border border-amber-100">
-                      <i className="fas fa-quote-left text-gray-400 text-4xl mb-4"></i>
-                      <p className="text-gray-600">
-                        {quotes.length === 0
-                          ? 'No quotes found. Add your first quote!'
-                          : `No ${statusFilter} quotes found.`
-                        }
-                      </p>
-                      {statusFilter !== 'all' && (
-                        <button
-                          onClick={() => setStatusFilter('all')}
-                          className="mt-3 text-amber-600 hover:text-amber-700 text-sm underline"
-                        >
-                          Show all quotes
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-
-                return filteredQuotes.map((quote) => (
+              {filteredQuotes.length === 0 ? (
+                <div className="bg-white rounded-lg p-8 text-center border border-amber-100">
+                  <i className="fas fa-quote-left text-gray-400 text-4xl mb-4"></i>
+                  <p className="text-gray-600">
+                    {quotes.length === 0
+                      ? 'No quotes found. Add your first quote!'
+                      : `No ${statusFilter} quotes found.`
+                    }
+                  </p>
+                  {statusFilter !== 'all' && (
+                    <button
+                      onClick={() => setStatusFilter('all')}
+                      className="mt-3 text-amber-600 hover:text-amber-700 text-sm underline"
+                    >
+                      Show all quotes
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredQuotes.map((quote) => (
                   <div key={quote.id} className="bg-white rounded-lg p-6 shadow-sm border border-amber-100">
-                    {editingQuote?.id === quote.id ? (
-                      // Edit Form
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Quote Text *
-                          </label>
-                          <textarea
-                            name="quote_text"
-                            value={editingQuote.quote_text}
-                            onChange={handleEditQuoteChange}
-                            rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            required
+                    <div className="flex items-start space-x-4">
+                      {quote.quote_image_url && (
+                        <div className="flex-shrink-0">
+                          <img
+                            src={quote.quote_image_url}
+                            alt="Quote"
+                            className="w-20 h-20 object-cover rounded-lg"
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Author
-                          </label>
-                          <input
-                            type="text"
-                            name="quote_author"
-                            value={editingQuote.quote_author}
-                            onChange={handleEditQuoteChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Category
-                          </label>
-                          <select
-                            name="quote_category"
-                            value={editingQuote.quote_category}
-                            onChange={handleEditQuoteChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="general">General</option>
-                            <option value="love">Love</option>
-                            <option value="marriage">Marriage</option>
-                            <option value="blessing">Blessing</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Display Order
-                          </label>
-                          <input
-                            type="number"
-                            name="display_order"
-                            value={editingQuote.display_order}
-                            onChange={handleEditQuoteChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Quote Image
-                          </label>
+                      )}
+                      <div className="flex-grow">
+                        <blockquote className="text-lg italic mb-2 text-gray-800">
+                          "{quote.quote_text}"
+                        </blockquote>
+                        <cite className="text-sm font-medium text-gray-600">
+                          — {quote.quote_author || 'Unknown'}
+                        </cite>
+                        <div className="flex items-center space-x-4 mt-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            quote.quote_category === 'love' ? 'bg-red-100 text-red-800' :
+                            quote.quote_category === 'marriage' ? 'bg-blue-100 text-blue-800' :
+                            quote.quote_category === 'blessing' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {quote.quote_category}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Order: {quote.display_order}
+                          </span>
 
-                          {/* Current Image Preview */}
-                          {editingQuote.quote_image_url && (
-                            <div className="mb-4">
-                              <img
-                                src={editingQuote.quote_image_url}
-                                alt="Quote Preview"
-                                className="w-32 h-32 object-cover rounded-lg border border-amber-200"
-                              />
-                            </div>
-                          )}
-
-                          {/* Upload Area */}
-                          <div
-                            className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 ${
-                              dragOver
-                                ? 'border-amber-400 bg-amber-50'
-                                : uploading
-                                ? 'border-blue-400 bg-blue-50'
-                                : 'border-gray-300 hover:border-amber-400 hover:bg-amber-50'
-                            }`}
-                            onDragOver={handleDragOver}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, 'edit')}
-                          >
-                            <label className="cursor-pointer block">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => {
-                                  if (e.target.files && e.target.files[0]) {
-                                    handleImageUpload(e.target.files[0], 'edit');
-                                  }
-                                }}
-                                className="hidden"
-                                disabled={uploading}
-                              />
-
-                              {uploading ? (
-                                <div className="flex flex-col items-center">
-                                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
-                                  <p className="text-amber-600 font-medium">Mengupload...</p>
-                                </div>
-                              ) : dragOver ? (
-                                <div className="flex flex-col items-center">
-                                  <div className="text-4xl mb-2">📤</div>
-                                  <p className="text-amber-700 font-medium">Drop gambar di sini</p>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col items-center">
-                                  <div className="text-4xl mb-2">💬</div>
-                                  <p className="text-gray-700 font-medium">Upload Gambar Quote</p>
-                                  <p className="text-gray-500 text-sm mb-2">Klik atau drag & drop</p>
-                                  <div className="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
-                                    Pilih Gambar
-                                  </div>
-                                  <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
-                                </div>
-                              )}
-                            </label>
-                          </div>
-                        </div>
-                        <div className="md:col-span-2 flex space-x-3">
-                          <button
-                            type="button"
-                            onClick={updateQuote}
-                            disabled={isSubmitting}
-                            className={`px-6 py-2 rounded-md font-medium text-white ${
-                              isSubmitting
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700'
-                            } transition-colors duration-200`}
-                          >
-                            {isSubmitting ? 'Updating...' : 'Update Quote'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingQuote(null)}
-                            className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      // Display Mode
-                      <div className="flex items-start space-x-4">
-                        {quote.quote_image_url && (
-                          <div className="flex-shrink-0">
-                            <img
-                              src={quote.quote_image_url}
-                              alt="Quote"
-                              className="w-20 h-20 object-cover rounded-lg"
-                            />
-                          </div>
-                        )}
-                        <div className="flex-grow">
-                          <blockquote className="text-lg italic mb-2 text-gray-800">
-                            "{quote.quote_text}"
-                          </blockquote>
-                          <cite className="text-sm font-medium text-gray-600">
-                            — {quote.quote_author || 'Unknown'}
-                          </cite>
-                          <div className="flex items-center space-x-4 mt-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              quote.quote_category === 'love' ? 'bg-red-100 text-red-800' :
-                              quote.quote_category === 'marriage' ? 'bg-blue-100 text-blue-800' :
-                              quote.quote_category === 'blessing' ? 'bg-green-100 text-green-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {quote.quote_category}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Order: {quote.display_order}
-                            </span>
-
-                            {/* Toggle Active/Inactive */}
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs text-gray-600">Status:</span>
-                              <button
-                                onClick={() => toggleQuoteStatus(quote.id, !quote.is_active)}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-                                  quote.is_active ? 'bg-green-500' : 'bg-gray-300'
+                          {/* Toggle Active/Inactive */}
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-gray-600">Status:</span>
+                            <button
+                              onClick={() => toggleQuoteStatus(quote.id, !quote.is_active)}
+                              disabled={isSubmitting}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+                                quote.is_active ? 'bg-green-500' : 'bg-gray-300'
+                              } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={quote.is_active ? 'Click to deactivate (will show no quote)' : 'Click to activate (will deactivate others)'}
+                            >
+                              <span
+                                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200 ${
+                                  quote.is_active ? 'translate-x-5' : 'translate-x-1'
                                 }`}
-                                title={quote.is_active ? 'Click to deactivate' : 'Click to activate'}
-                              >
-                                <span
-                                  className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200 ${
-                                    quote.is_active ? 'translate-x-5' : 'translate-x-1'
-                                  }`}
-                                />
-                              </button>
-                              <span className={`text-xs font-medium ${
-                                quote.is_active ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {quote.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
+                              />
+                            </button>
+                            <span className={`text-xs font-medium ${
+                              quote.is_active ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {quote.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center space-x-2 ml-auto">
+                            <button
+                              onClick={() => setEditingQuote(quote)}
+                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-xs hover:bg-blue-200 transition-colors"
+                              title="Edit quote"
+                            >
+                              <i className="fas fa-edit mr-1"></i>
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteQuote(quote.id)}
+                              className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-xs hover:bg-red-200 transition-colors"
+                              title="Delete quote"
+                            >
+                              <i className="fas fa-trash mr-1"></i>
+                              Delete
+                            </button>
                           </div>
                         </div>
-                        <div className="flex-shrink-0 flex space-x-2">
-                          <button
-                            onClick={() => setEditingQuote(quote)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                            title="Edit Quote"
-                          >
-                            <i className="fas fa-edit"></i>
-                          </button>
-                          <button
-                            onClick={() => deleteQuote(quote.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                            title="Delete Quote"
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                ));
-              })()}
+                ))
+              )}
             </div>
           </div>
         </div>
