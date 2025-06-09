@@ -1,34 +1,76 @@
-import { useState } from "react";
-import { useWedding } from "../../contexts/WeddingContext";
-import { GalleryImage } from "../../types/wedding";
+import { useState, useEffect } from "react";
+
+interface GalleryImage {
+  id: number;
+  image_src: string;
+  image_alt: string;
+  image_type: 'landscape' | 'square' | 'portrait';
+  image_size: 'L' | 'S';
+  display_order: number;
+}
+
+interface GallerySettings {
+  header_title: string;
+  header_subtitle: string;
+  bottom_quote: string;
+}
 
 const Gallery = () => {
-  const { weddingData, isLoading } = useWedding();
-  const gallerySettings = weddingData.gallerySettings;
-
+  const [galleryData, setGalleryData] = useState<{
+    settings: GallerySettings;
+    images: GalleryImage[];
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<null | GalleryImage>(null);
   const [imageLoaded, setImageLoaded] = useState<Record<string, boolean>>({});
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+  // Load gallery data from database
+  useEffect(() => {
+    loadGalleryData();
+  }, []);
+
+  const loadGalleryData = async () => {
+    try {
+      setIsLoading(true);
+
+      const response = await fetch(`${API_BASE_URL}/gallery/public`);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setGalleryData(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading gallery data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Get active gallery images
-  const activeGalleryImages = gallerySettings.images.filter(image => image.isActive);
+  const activeGalleryImages = galleryData?.images || [];
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto mb-4"></div>
-          <p style={{ color: "#644F44" }}>Loading gallery...</p>
+          <p style={{ color: "#644F44" }}>Loading gallery from database...</p>
         </div>
       </div>
     );
   }
 
-  // If no active images, show default message
-  if (activeGalleryImages.length === 0) {
+  // If no data or no active images, show default message
+  if (!galleryData || activeGalleryImages.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p style={{ color: "#644F44" }}>No gallery images available</p>
+          <p className="text-sm text-gray-500 mt-2">Please check back later</p>
         </div>
       </div>
     );
@@ -98,14 +140,14 @@ const Gallery = () => {
             className="text-4xl md:text-5xl lg:text-6xl font-light mb-6 tracking-wider"
             style={{ color: "#644F44" }}
           >
-            {gallerySettings.headerTitle}
+            {galleryData.settings.header_title}
           </h1>
 
           <p
             className="text-lg tracking-wide opacity-70 italic max-w-2xl mx-auto leading-relaxed"
             style={{ color: "#644F44" }}
           >
-            "{gallerySettings.headerSubtitle}"
+            "{galleryData.settings.header_subtitle}"
           </p>
           
           <div className="mt-8 flex items-center justify-center space-x-4">
@@ -127,25 +169,38 @@ const Gallery = () => {
               >
                 {/* Image Container */}
                 <div className={`relative overflow-hidden rounded-2xl shadow-lg transition-all duration-500 group-hover:shadow-2xl group-hover:scale-105 ${
-                  image.type === 'landscape' 
-                    ? 'aspect-video md:col-span-2 lg:col-span-2' 
+                  image.image_type === 'landscape'
+                    ? 'aspect-video md:col-span-2 lg:col-span-2'
+                    : image.image_type === 'portrait'
+                    ? 'aspect-[3/4]'
                     : 'aspect-square'
                 }`}>
                   {/* Loading skeleton */}
                   {!imageLoaded[image.id] && (
                     <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse rounded-2xl"></div>
                   )}
-                  
+
                   {/* Decorative frame */}
                   <div className="absolute -inset-1 bg-gradient-to-br from-amber-200 via-rose-200 to-pink-200 rounded-2xl opacity-0 group-hover:opacity-30 transition-opacity duration-500 blur-sm"></div>
-                  
+
                   {/* Main image */}
                   <img
-                    src={image.src}
-                    alt={image.alt}
+                    src={image.image_src}
+                    alt={image.image_alt}
                     className="relative z-10 w-full h-full object-cover rounded-2xl transition-transform duration-700 group-hover:scale-110"
                     onLoad={() => handleImageLoad(image.id)}
                   />
+
+                  {/* Size badge */}
+                  <div className="absolute top-4 left-4 z-40">
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      image.image_size === 'L'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {image.image_size}
+                    </span>
+                  </div>
                   
                   {/* Overlay gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl z-20"></div>
@@ -179,7 +234,7 @@ const Gallery = () => {
                 className="text-xl italic font-light leading-relaxed mb-4"
                 style={{ color: "#644F44" }}
               >
-                "{gallerySettings.bottomQuote}"
+                "{galleryData.settings.bottom_quote}"
               </p>
               <div className="flex items-center justify-center space-x-3">
                 <div className="w-8 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
@@ -199,10 +254,16 @@ const Gallery = () => {
         >
           <div className="relative max-w-5xl max-h-full">
             <img
-              src={selectedImage.src}
-              alt={selectedImage.alt}
+              src={selectedImage.image_src}
+              alt={selectedImage.image_alt}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
             />
+            {/* Image info overlay */}
+            <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2">
+              <p className="text-white text-sm">
+                Size: {selectedImage.image_size} | Type: {selectedImage.image_type}
+              </p>
+            </div>
             <button
               onClick={closeLightbox}
               className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors duration-300"

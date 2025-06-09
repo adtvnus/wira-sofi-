@@ -1022,6 +1022,332 @@ app.get('/api/quotes/active', async (req, res) => {
   }
 });
 
+// Gallery multer configuration
+const galleryStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const galleryPath = path.join(__dirname, '../public/images/GalleryDatabase');
+    if (!fs.existsSync(galleryPath)) {
+      fs.mkdirSync(galleryPath, { recursive: true });
+    }
+    cb(null, galleryPath);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    const filename = `gallery-${timestamp}${extension}`;
+    cb(null, filename);
+  }
+});
+
+const galleryUpload = multer({
+  storage: galleryStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// Gallery Settings endpoints
+// Get gallery settings (header, subtitle, bottom quote)
+app.get('/api/gallery/settings', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    const [settings] = await connection.query(`
+      SELECT header_title, header_subtitle, bottom_quote, is_active
+      FROM gallery_text_settings
+      WHERE wedding_id = 1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (settings.length === 0) {
+      // Return default settings if none exist
+      res.json({
+        success: true,
+        data: {
+          header_title: 'Our Gallery',
+          header_subtitle: 'Capturing beautiful moments of our special day',
+          bottom_quote: 'Every picture tells a story of love',
+          is_active: true
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        data: settings[0]
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching gallery settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch gallery settings'
+    });
+  }
+});
+
+// Update gallery settings
+app.put('/api/gallery/settings', authenticateToken, async (req, res) => {
+  try {
+    const { headerTitle, headerSubtitle, bottomQuote } = req.body;
+    const connection = await getConnection();
+
+    // Check if settings exist
+    const [existing] = await connection.query(`
+      SELECT id FROM gallery_text_settings WHERE wedding_id = 1
+    `);
+
+    if (existing.length === 0) {
+      // Insert new settings
+      await connection.query(`
+        INSERT INTO gallery_text_settings (
+          wedding_id, header_title, header_subtitle, bottom_quote,
+          is_active, created_by, created_at, updated_at
+        ) VALUES (1, ?, ?, ?, TRUE, ?, NOW(), NOW())
+      `, [headerTitle, headerSubtitle, bottomQuote, req.user.id]);
+    } else {
+      // Update existing settings
+      await connection.query(`
+        UPDATE gallery_text_settings
+        SET header_title = ?, header_subtitle = ?, bottom_quote = ?, updated_at = NOW()
+        WHERE wedding_id = 1
+      `, [headerTitle, headerSubtitle, bottomQuote]);
+    }
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      message: 'Gallery settings updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating gallery settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update gallery settings'
+    });
+  }
+});
+
+// Get all gallery images
+app.get('/api/gallery/images', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    const [images] = await connection.query(`
+      SELECT
+        id, image_src, absolute_path, image_alt, image_type, image_size,
+        display_order, is_active, created_at, updated_at
+      FROM gallery_images
+      WHERE wedding_id = 1
+      ORDER BY display_order ASC, created_at DESC
+    `);
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      data: images
+    });
+  } catch (error) {
+    console.error('Error fetching gallery images:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch gallery images'
+    });
+  }
+});
+
+// Gallery Image Upload endpoint
+app.post('/api/gallery/upload-image', authenticateToken, galleryUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file provided'
+      });
+    }
+
+    const { imageSize = 'S', imageAlt = '', imageType = 'square', displayOrder = 0 } = req.body;
+
+    // Generate URLs
+    const imageUrl = `/images/GalleryDatabase/${req.file.filename}`;
+    const absolutePath = path.join(__dirname, '../public/images/GalleryDatabase', req.file.filename);
+
+    // Save to database
+    const connection = await getConnection();
+
+    const [result] = await connection.query(`
+      INSERT INTO gallery_images (
+        wedding_id, image_src, absolute_path, image_alt, image_type, image_size,
+        display_order, is_active, created_by, created_at, updated_at
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, TRUE, ?, NOW(), NOW())
+    `, [
+      imageUrl, absolutePath, imageAlt, imageType, imageSize,
+      displayOrder, req.user.id
+    ]);
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: {
+        id: result.insertId,
+        filename: req.file.filename,
+        url: imageUrl,
+        absolutePath: absolutePath,
+        size: imageSize,
+        alt: imageAlt,
+        type: imageType,
+        displayOrder: displayOrder
+      }
+    });
+  } catch (error) {
+    console.error('Error uploading gallery image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload image'
+    });
+  }
+});
+
+// Update gallery image
+app.put('/api/gallery/images/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { imageAlt, imageType, imageSize, displayOrder, isActive } = req.body;
+
+    const connection = await getConnection();
+
+    await connection.query(`
+      UPDATE gallery_images
+      SET image_alt = ?, image_type = ?, image_size = ?, display_order = ?,
+          is_active = ?, updated_at = NOW()
+      WHERE id = ? AND wedding_id = 1
+    `, [imageAlt, imageType, imageSize, displayOrder, isActive, id]);
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      message: 'Image updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating gallery image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update image'
+    });
+  }
+});
+
+// Delete gallery image
+app.delete('/api/gallery/images/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await getConnection();
+
+    // Get image info before deleting
+    const [images] = await connection.query(`
+      SELECT image_src, absolute_path FROM gallery_images
+      WHERE id = ? AND wedding_id = 1
+    `, [id]);
+
+    if (images.length === 0) {
+      await connection.end();
+      return res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      });
+    }
+
+    // Delete from database
+    await connection.query(`
+      DELETE FROM gallery_images WHERE id = ? AND wedding_id = 1
+    `, [id]);
+
+    await connection.end();
+
+    // Try to delete physical file
+    const image = images[0];
+    if (image.absolute_path && fs.existsSync(image.absolute_path)) {
+      try {
+        fs.unlinkSync(image.absolute_path);
+      } catch (fileError) {
+        console.warn('Could not delete physical file:', fileError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Image deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting gallery image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete image'
+    });
+  }
+});
+
+// Get gallery data for public display (no auth required)
+app.get('/api/gallery/public', async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get gallery settings
+    const [settings] = await connection.query(`
+      SELECT header_title, header_subtitle, bottom_quote
+      FROM gallery_text_settings
+      WHERE wedding_id = 1 AND is_active = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    // Get active gallery images
+    const [images] = await connection.query(`
+      SELECT
+        id, image_src, image_alt, image_type, image_size, display_order
+      FROM gallery_images
+      WHERE wedding_id = 1 AND is_active = TRUE
+      ORDER BY display_order ASC, created_at DESC
+    `);
+
+    await connection.end();
+
+    const gallerySettings = settings.length > 0 ? settings[0] : {
+      header_title: 'Our Gallery',
+      header_subtitle: 'Capturing beautiful moments of our special day',
+      bottom_quote: 'Every picture tells a story of love'
+    };
+
+    res.json({
+      success: true,
+      data: {
+        settings: gallerySettings,
+        images: images
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching public gallery:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch gallery data'
+    });
+  }
+});
+
 // Quotes Image Upload endpoint
 app.post('/api/quotes/upload-image', authenticateToken, (req, res, next) => {
   console.log('🔍 Upload request received:', {
