@@ -17,6 +17,8 @@ const corsOptions = {
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [
     'http://localhost:5173',
     'http://localhost:5174',
+    'http://localhost:5175',
+    'http://localhost:5176',
     'http://localhost:3000'
   ],
   credentials: true,
@@ -215,7 +217,9 @@ app.get('/api/health', (req, res) => {
     endpoints: {
       login: '/api/auth/login',
       settings: '/api/wedding-settings',
-      dashboard: '/api/dashboard/stats'
+      dashboard: '/api/dashboard/stats',
+      invitedSettings: '/api/invited-settings',
+      invitedPublic: '/api/invited-settings/public'
     }
   });
 });
@@ -1641,6 +1645,150 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// Invited Settings Management endpoints
+app.get('/api/invited-settings', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get invited settings data
+    const [rows] = await connection.query(`
+      SELECT * FROM invited_settings
+      WHERE wedding_id = 1 AND is_enabled = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (rows.length > 0) {
+      res.json({ success: true, data: rows[0] });
+    } else {
+      // Return default structure if no data found
+      res.json({
+        success: true,
+        data: {
+          header_title: "You're Invited",
+          header_subtitle: "We would be honored by your presence",
+          event_title: "Wedding Ceremony",
+          event_name: "Akad Nikah",
+          event_date: "2025-09-26",
+          event_time: "12:00",
+          venue_name: "Gedung C Teknik, Universitas Riau",
+          venue_address: "Jl. HR. Soebrantas, Simpang Baru, Kec. Tampan, Kota Pekanbaru, Riau",
+          google_maps_url: "",
+          save_the_date_title: "Save the Date",
+          save_the_date_message: "We can't wait to celebrate with you!",
+          is_enabled: true
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching invited settings:', error);
+    res.status(500).json({ error: 'Failed to fetch invited settings' });
+  }
+});
+
+app.put('/api/invited-settings', authenticateToken, async (req, res) => {
+  try {
+    const {
+      headerTitle, headerSubtitle, eventTitle, eventName, eventDate, eventTime,
+      venueName, venueAddress, googleMapsUrl, saveTheDateTitle, saveTheDateMessage, isEnabled
+    } = req.body;
+
+    console.log('🔍 Invited Settings Update Request:', req.body);
+
+    const connection = await getConnection();
+
+    // Check if settings exist
+    const [existing] = await connection.query(`
+      SELECT id FROM invited_settings WHERE wedding_id = 1
+    `);
+
+    if (existing.length > 0) {
+      // Update existing settings
+      await connection.query(`
+        UPDATE invited_settings SET
+          header_title = ?, header_subtitle = ?, event_title = ?, event_name = ?,
+          event_date = ?, event_time = ?, venue_name = ?, venue_address = ?,
+          google_maps_url = ?, save_the_date_title = ?, save_the_date_message = ?,
+          is_enabled = ?, updated_at = NOW()
+        WHERE wedding_id = 1
+      `, [
+        headerTitle, headerSubtitle, eventTitle, eventName, eventDate, eventTime,
+        venueName, venueAddress, googleMapsUrl, saveTheDateTitle, saveTheDateMessage, isEnabled
+      ]);
+
+      console.log('✅ Invited settings updated successfully');
+    } else {
+      // Insert new settings
+      await connection.query(`
+        INSERT INTO invited_settings (
+          wedding_id, header_title, header_subtitle, event_title, event_name,
+          event_date, event_time, venue_name, venue_address, google_maps_url,
+          save_the_date_title, save_the_date_message, is_enabled, created_by
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        headerTitle, headerSubtitle, eventTitle, eventName, eventDate, eventTime,
+        venueName, venueAddress, googleMapsUrl, saveTheDateTitle, saveTheDateMessage, isEnabled, req.user.id
+      ]);
+
+      console.log('✅ Invited settings created successfully');
+    }
+
+    await connection.end();
+
+    res.json({
+      success: true,
+      message: 'Invited settings saved successfully'
+    });
+  } catch (error) {
+    console.error('Error saving invited settings:', error);
+    res.status(500).json({ error: 'Failed to save invited settings' });
+  }
+});
+
+// Get invited settings for public use (no auth required)
+app.get('/api/invited-settings/public', async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    const [rows] = await connection.query(`
+      SELECT header_title, header_subtitle, event_title, event_name, event_date, event_time,
+             venue_name, venue_address, google_maps_url, save_the_date_title, save_the_date_message
+      FROM invited_settings
+      WHERE wedding_id = 1 AND is_enabled = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (rows.length > 0) {
+      res.json({ success: true, data: rows[0] });
+    } else {
+      res.json({
+        success: true,
+        data: {
+          header_title: "You're Invited",
+          header_subtitle: "We would be honored by your presence",
+          event_title: "Wedding Ceremony",
+          event_name: "Akad Nikah",
+          event_date: "2025-09-26",
+          event_time: "12:00",
+          venue_name: "Gedung C Teknik, Universitas Riau",
+          venue_address: "Jl. HR. Soebrantas, Simpang Baru, Kec. Tampan, Kota Pekanbaru, Riau",
+          google_maps_url: "",
+          save_the_date_title: "Save the Date",
+          save_the_date_message: "We can't wait to celebrate with you!"
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching public invited settings:', error);
+    res.status(500).json({ error: 'Failed to fetch invited settings' });
+  }
+});
+
 // Bride Groom Management endpoints
 app.get('/api/bride-groom', authenticateToken, async (req, res) => {
   try {
@@ -1800,9 +1948,12 @@ app.listen(PORT, () => {
   console.log(`📝 RSVP API: http://localhost:${PORT}/api/rsvp`);
   console.log(`⚙️ Settings API: http://localhost:${PORT}/api/wedding-settings`);
   console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard/stats`);
+  console.log(`💌 Invited Settings API: http://localhost:${PORT}/api/invited-settings`);
+  console.log(`🌐 Public Invited API: http://localhost:${PORT}/api/invited-settings/public`);
   console.log('\n🔐 Default Admin Credentials:');
   console.log('   Username: admin');
   console.log('   Password: admin');
   console.log('\n🔄 Server running with NODEMON - Auto-restart enabled!');
   console.log('💡 Edit any file in backend/ or src/ to see auto-restart in action!');
+  console.log('🔧 Debug: Server restarted at', new Date().toISOString());
 });

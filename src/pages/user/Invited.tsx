@@ -4,14 +4,21 @@ import { useWedding } from "../../contexts/WeddingContext";
 const Invited = () => {
   const [isMapLoaded, setIsMapLoaded] = useState(true);
   const [weddingSettings, setWeddingSettings] = useState<any>(null);
+  const [invitedSettingsDB, setInvitedSettingsDB] = useState<any>(null);
   const { weddingData } = useWedding();
   const { invitedSettings } = weddingData;
+
+  // Debug: Log invited settings
+  console.log('🔍 Invited Settings from Context:', invitedSettings);
+  console.log('🔍 Invited Settings from DB:', invitedSettingsDB);
+  console.log('🔍 Wedding Data from Context:', weddingData);
 
   // Load wedding settings from database
   useEffect(() => {
     const loadWeddingSettings = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/wedding-settings/active');
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_BASE_URL}/wedding-settings/active`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
@@ -24,6 +31,29 @@ const Invited = () => {
     };
 
     loadWeddingSettings();
+  }, []);
+
+  // Load invited settings from database
+  useEffect(() => {
+    const loadInvitedSettings = async () => {
+      try {
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_BASE_URL}/invited-settings/public`);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            console.log('✅ Loaded invited settings from database:', data.data);
+            setInvitedSettingsDB(data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading invited settings:', error);
+        console.log('🔄 Fallback to context data');
+      }
+    };
+
+    loadInvitedSettings();
   }, []);
 
   // Complete wedding details from database
@@ -40,29 +70,29 @@ const Invited = () => {
     receptionAddress: weddingSettings.reception_address,
   } : null;
 
-  // Complete invited settings with all parameters from admin
+  // Complete invited settings with priority: Database > Context > Default
   const completeInvitedSettings = {
     // Header information
-    headerTitle: invitedSettings.headerTitle || "Wedding Invitation",
-    headerSubtitle: invitedSettings.headerSubtitle || "We invite you to celebrate our special day",
+    headerTitle: invitedSettingsDB?.header_title || invitedSettings.headerTitle || "Wedding Invitation",
+    headerSubtitle: invitedSettingsDB?.header_subtitle || invitedSettings.headerSubtitle || "We invite you to celebrate our special day",
 
     // Event information from InvitedManagement
-    eventTitle: invitedSettings.eventTitle || "Wedding Ceremony",
-    eventName: invitedSettings.eventName || "Wedding Ceremony",
-    eventDate: invitedSettings.eventDate || "",
-    eventTime: invitedSettings.eventTime || "",
+    eventTitle: invitedSettingsDB?.event_title || invitedSettings.eventTitle || "Wedding Ceremony",
+    eventName: invitedSettingsDB?.event_name || invitedSettings.eventName || "Wedding Ceremony",
+    eventDate: invitedSettingsDB?.event_date || invitedSettings.eventDate || "",
+    eventTime: invitedSettingsDB?.event_time || invitedSettings.eventTime || "",
 
     // Venue information from InvitedManagement
-    venueName: invitedSettings.venueName || "",
-    venueAddress: invitedSettings.venueAddress || "",
-    googleMapsUrl: invitedSettings.googleMapsUrl || "",
+    venueName: invitedSettingsDB?.venue_name || invitedSettings.venueName || "",
+    venueAddress: invitedSettingsDB?.venue_address || invitedSettings.venueAddress || "",
+    googleMapsUrl: invitedSettingsDB?.google_maps_url || invitedSettings.googleMapsUrl || "",
 
     // Save the date information
-    saveTheDateTitle: invitedSettings.saveTheDateTitle || "Save The Date",
-    saveTheDateMessage: invitedSettings.saveTheDateMessage || "We can't wait to celebrate with you!",
+    saveTheDateTitle: invitedSettingsDB?.save_the_date_title || invitedSettings.saveTheDateTitle || "Save The Date",
+    saveTheDateMessage: invitedSettingsDB?.save_the_date_message || invitedSettings.saveTheDateMessage || "We can't wait to celebrate with you!",
 
     // Status
-    isEnabled: invitedSettings.isEnabled !== false
+    isEnabled: invitedSettingsDB?.is_enabled !== false && invitedSettings.isEnabled !== false
   };
 
   // Determine which venue details to use (prioritize database wedding details)
@@ -338,7 +368,7 @@ const Invited = () => {
                             className="text-xl font-medium mt-1"
                             style={{ color: "#644F44" }}
                           >
-                            {completeInvitedSettings.eventTime} WIB
+                            {completeInvitedSettings.eventTime}
                           </p>
                         )}
                         {venueDetails.name && (
@@ -466,13 +496,13 @@ const Invited = () => {
                 className="text-lg font-medium mb-2"
                 style={{ color: "#644F44" }}
               >
-                {/* Priority: Wedding date > Reception date > Event date */}
-                {weddingDetails && weddingDetails.weddingDate ?
-                  formatDate(weddingDetails.weddingDate) :
-                  weddingDetails && weddingDetails.receptionDate ?
-                    formatDate(weddingDetails.receptionDate) :
-                    completeInvitedSettings.eventDate ?
-                      formatDate(completeInvitedSettings.eventDate) :
+                {/* Priority: Event date > Wedding date > Reception date */}
+                {completeInvitedSettings.eventDate ?
+                  formatDate(completeInvitedSettings.eventDate) :
+                  weddingDetails && weddingDetails.weddingDate ?
+                    formatDate(weddingDetails.weddingDate) :
+                    weddingDetails && weddingDetails.receptionDate ?
+                      formatDate(weddingDetails.receptionDate) :
                       'Save The Date'
                 }
               </p>

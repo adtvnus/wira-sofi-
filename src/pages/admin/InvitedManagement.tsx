@@ -2,72 +2,64 @@ import React, { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 import AdminLayout from '../../layouts/AdminLayout';
 
+interface InvitedEvent {
+  id: string;
+  eventTitle: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string;
+  venueName: string;
+  venueAddress: string;
+  googleMapsUrl: string;
+}
+
 const InvitedManagement: React.FC = () => {
   const { weddingData, updateInvitedSettings } = useWedding();
   const { invitedSettings } = weddingData;
   
+  // Single form state for all invited settings
   const [formData, setFormData] = useState({
+    // Header settings
+    headerTitle: invitedSettings.headerTitle,
+    headerSubtitle: invitedSettings.headerSubtitle,
+    // Event information
     eventTitle: invitedSettings.eventTitle,
+    eventName: invitedSettings.eventName,
+    eventDate: invitedSettings.eventDate,
+    eventTime: invitedSettings.eventTime,
+    // Venue information
     venueName: invitedSettings.venueName,
     venueAddress: invitedSettings.venueAddress,
-    // Wedding details
-    weddingDate: '',
-    weddingTime: '',
-    weddingVenue: '',
-    weddingAddress: '',
-    // Reception details
-    receptionDate: '',
-    receptionTime: '',
-    receptionVenue: '',
-    receptionAddress: ''
+    googleMapsUrl: invitedSettings.googleMapsUrl,
+    // Save the date
+    saveTheDateTitle: invitedSettings.saveTheDateTitle,
+    saveTheDateMessage: invitedSettings.saveTheDateMessage,
+    // Page status
+    isEnabled: invitedSettings.isEnabled
   });
 
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Load initial data
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
+      headerTitle: invitedSettings.headerTitle,
+      headerSubtitle: invitedSettings.headerSubtitle,
       eventTitle: invitedSettings.eventTitle,
+      eventName: invitedSettings.eventName,
+      eventDate: invitedSettings.eventDate,
+      eventTime: invitedSettings.eventTime,
       venueName: invitedSettings.venueName,
-      venueAddress: invitedSettings.venueAddress
-    }));
+      venueAddress: invitedSettings.venueAddress,
+      googleMapsUrl: invitedSettings.googleMapsUrl,
+      saveTheDateTitle: invitedSettings.saveTheDateTitle,
+      saveTheDateMessage: invitedSettings.saveTheDateMessage,
+      isEnabled: invitedSettings.isEnabled
+    });
   }, [invitedSettings]);
 
-  // Load existing wedding settings
-  useEffect(() => {
-    const loadWeddingSettings = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/api/wedding-settings/active', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data) {
-            const settings = data.data;
-            setFormData(prev => ({
-              ...prev,
-              weddingDate: settings.wedding_date || '',
-              weddingTime: settings.wedding_time || '',
-              weddingVenue: settings.wedding_venue || '',
-              weddingAddress: settings.wedding_address || '',
-              receptionDate: settings.reception_date || '',
-              receptionTime: settings.reception_time || '',
-              receptionVenue: settings.reception_venue || '',
-              receptionAddress: settings.reception_address || ''
-            }));
-          }
-        }
-      } catch (error) {
-        console.error('Error loading wedding settings:', error);
-      }
-    };
-
-    loadWeddingSettings();
-  }, []);
-
+  // Input change handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -76,44 +68,69 @@ const InvitedManagement: React.FC = () => {
     }));
   };
 
+
+
   const handleSave = async () => {
     try {
-      // Save invited settings
-      updateInvitedSettings({
-        eventTitle: formData.eventTitle,
-        venueName: formData.venueName,
-        venueAddress: formData.venueAddress
-      });
+      setIsLoading(true);
 
-      // Save wedding and reception details to backend
-      const response = await fetch('http://localhost:3001/api/wedding-settings', {
-        method: 'POST',
+      console.log('🔍 Saving invited settings:', formData);
+
+      // Check if token exists (use correct key from AuthContext)
+      const token = localStorage.getItem('auth-token');
+      console.log('🔑 Token exists:', !!token);
+      console.log('🔑 Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
+
+      // Save to database via API
+      const response = await fetch('http://localhost:3001/api/invited-settings', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          weddingDate: formData.weddingDate,
-          weddingTime: formData.weddingTime,
-          weddingVenue: formData.weddingVenue,
-          weddingAddress: formData.weddingAddress,
-          receptionDate: formData.receptionDate,
-          receptionTime: formData.receptionTime,
-          receptionVenue: formData.receptionVenue,
-          receptionAddress: formData.receptionAddress
-        })
+        body: JSON.stringify(formData)
       });
 
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+
       if (response.ok) {
-        setMessage('Pengaturan Invited dan detail acara berhasil disimpan!');
+        const result = await response.json();
+        console.log('✅ Database save successful:', result);
+
+        // Also save to context for immediate UI update
+        updateInvitedSettings(formData);
+
+        setMessage('✅ Settings saved to database successfully!');
       } else {
-        setMessage('Pengaturan Invited disimpan, tetapi ada error pada detail acara.');
+        const errorText = await response.text();
+        console.error('❌ Database save failed - Status:', response.status);
+        console.error('❌ Database save failed - Response:', errorText);
+
+        // Try to parse as JSON
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+
+        // Fallback: save to context only
+        updateInvitedSettings(formData);
+        setMessage(`⚠️ Database error (${response.status}): ${errorData.error || 'Unknown error'}. Settings saved locally.`);
       }
     } catch (error) {
-      setMessage('Pengaturan Invited disimpan, tetapi ada error pada detail acara.');
+      console.error('❌ Network/Fetch error:', error);
+      console.error('❌ Error details:', error.message);
+
+      // Fallback: save to context only
+      updateInvitedSettings(formData);
+      setMessage(`❌ Network error: ${error.message}. Settings saved locally only.`);
+    } finally {
+      setIsLoading(false);
     }
 
-    setTimeout(() => setMessage(''), 3000);
+    setTimeout(() => setMessage(''), 5000);
   };
 
   return (
@@ -124,62 +141,137 @@ const InvitedManagement: React.FC = () => {
             <div className="flex items-center">
               <i className="fas fa-envelope-open-text text-amber-600 text-3xl mr-4"></i>
               <div>
-                <h1 className="text-3xl font-bold text-amber-800">Invitation Page</h1>
+                <h1 className="text-3xl font-bold text-amber-800">Invitation Settings</h1>
                 <p className="text-amber-700 mt-1">Manage invitation page content</p>
               </div>
             </div>
           </div>
 
           {message && (
-            <div className="mx-8 mt-6 p-4 rounded-xl bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-300 shadow-sm">
+            <div className={`mx-8 mt-6 p-4 rounded-xl border shadow-sm ${
+              message.includes('❌') || message.includes('Error')
+                ? 'bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border-red-300'
+                : 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-300'
+            }`}>
               <div className="flex items-center">
-                <i className="fas fa-check-circle mr-3"></i>
+                <i className={`fas ${message.includes('❌') || message.includes('Error') ? 'fa-exclamation-circle' : 'fa-check-circle'} mr-3`}></i>
                 {message}
               </div>
             </div>
           )}
 
           <div className="p-8 space-y-8">
-            {/* Essential Event Information */}
-            <div className="space-y-6">
-              <div className="flex items-center mb-4">
-                <i className="fas fa-calendar-heart text-amber-600 mr-3"></i>
-                <h3 className="text-xl font-semibold text-amber-800">Event Information</h3>
-              </div>
-
-              <div>
-                <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                  <i className="fas fa-heading mr-2"></i>
-                  Event Title
+            {/* Page Status */}
+            <div className="bg-white/60 rounded-xl p-6 border border-amber-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-toggle-on text-amber-600 mr-3"></i>
+                  <h3 className="text-xl font-semibold text-amber-800">Page Status</h3>
+                </div>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.isEnabled}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isEnabled: e.target.checked }))}
+                    className="sr-only"
+                  />
+                  <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${formData.isEnabled ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${formData.isEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                  </div>
+                  <span className="ml-3 text-amber-800 font-medium">
+                    {formData.isEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
                 </label>
-                <input
-                  type="text"
-                  name="eventTitle"
-                  value={formData.eventTitle}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                  placeholder="Wedding Ceremony"
-                />
               </div>
             </div>
 
-            {/* Wedding Details */}
-            <div className="space-y-6">
-              <div className="flex items-center mb-4">
-                <i className="fas fa-rings-wedding text-amber-600 mr-3"></i>
-                <h3 className="text-xl font-semibold text-amber-800">Wedding Details</h3>
+            {/* Header Settings */}
+            <div className="bg-white/60 rounded-xl p-6 border border-amber-200">
+              <div className="flex items-center mb-6">
+                <i className="fas fa-heading text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Header Settings</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-heading mr-2"></i>
+                    Header Title
+                  </label>
+                  <input
+                    type="text"
+                    name="headerTitle"
+                    value={formData.headerTitle}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="You're Invited"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-quote-left mr-2"></i>
+                    Header Subtitle
+                  </label>
+                  <input
+                    type="text"
+                    name="headerSubtitle"
+                    value={formData.headerSubtitle}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="We would be honored by your presence"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Event Information */}
+            <div className="bg-white/60 rounded-xl p-6 border border-amber-200">
+              <div className="flex items-center mb-6">
+                <i className="fas fa-calendar-heart text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Event Information</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-heading mr-2"></i>
+                    Event Title
+                  </label>
+                  <input
+                    type="text"
+                    name="eventTitle"
+                    value={formData.eventTitle}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="Wedding Ceremony"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-tag mr-2"></i>
+                    Event Name
+                  </label>
+                  <input
+                    type="text"
+                    name="eventName"
+                    value={formData.eventName}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="Akad Nikah"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
                     <i className="fas fa-calendar mr-2"></i>
-                    Wedding Date
+                    Event Date
                   </label>
                   <input
                     type="date"
-                    name="weddingDate"
-                    value={formData.weddingDate}
+                    name="eventDate"
+                    value={formData.eventDate}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
                   />
@@ -188,26 +280,36 @@ const InvitedManagement: React.FC = () => {
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
                     <i className="fas fa-clock mr-2"></i>
-                    Wedding Time
+                    Event Time
                   </label>
                   <input
                     type="time"
-                    name="weddingTime"
-                    value={formData.weddingTime}
+                    name="eventTime"
+                    value={formData.eventTime}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
                   />
                 </div>
+              </div>
+            </div>
 
+            {/* Venue Information */}
+            <div className="bg-white/60 rounded-xl p-6 border border-amber-200">
+              <div className="flex items-center mb-6">
+                <i className="fas fa-map-marker-alt text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Venue Information</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
                     <i className="fas fa-building mr-2"></i>
-                    Wedding Venue
+                    Venue Name
                   </label>
                   <input
                     type="text"
-                    name="weddingVenue"
-                    value={formData.weddingVenue}
+                    name="venueName"
+                    value={formData.venueName}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
                     placeholder="Wedding venue name"
@@ -216,124 +318,73 @@ const InvitedManagement: React.FC = () => {
 
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
+                    <i className="fas fa-map mr-2"></i>
+                    Google Maps URL
+                  </label>
+                  <input
+                    type="url"
+                    name="googleMapsUrl"
+                    value={formData.googleMapsUrl}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="https://www.google.com/maps/embed?pb=..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
                     <i className="fas fa-location-dot mr-2"></i>
-                    Wedding Address
+                    Venue Address
                   </label>
                   <textarea
-                    name="weddingAddress"
-                    value={formData.weddingAddress}
+                    name="venueAddress"
+                    value={formData.venueAddress}
                     onChange={handleInputChange}
                     rows={3}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900 resize-none"
-                    placeholder="Wedding venue address..."
+                    placeholder="Complete venue address..."
                   />
                 </div>
               </div>
             </div>
 
-            {/* Reception Details */}
-            <div className="space-y-6">
-              <div className="flex items-center mb-4">
-                <i className="fas fa-glass-cheers text-amber-600 mr-3"></i>
-                <h3 className="text-xl font-semibold text-amber-800">Reception Details</h3>
+            {/* Save The Date Settings */}
+            <div className="bg-white/60 rounded-xl p-6 border border-amber-200">
+              <div className="flex items-center mb-6">
+                <i className="fas fa-calendar-check text-amber-600 mr-3"></i>
+                <h3 className="text-xl font-semibold text-amber-800">Save The Date Settings</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                    <i className="fas fa-calendar mr-2"></i>
-                    Reception Date
-                  </label>
-                  <input
-                    type="date"
-                    name="receptionDate"
-                    value={formData.receptionDate}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                    <i className="fas fa-clock mr-2"></i>
-                    Reception Time
-                  </label>
-                  <input
-                    type="time"
-                    name="receptionTime"
-                    value={formData.receptionTime}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                    <i className="fas fa-building mr-2"></i>
-                    Reception Venue
+                    <i className="fas fa-heading mr-2"></i>
+                    Save The Date Title
                   </label>
                   <input
                     type="text"
-                    name="receptionVenue"
-                    value={formData.receptionVenue}
+                    name="saveTheDateTitle"
+                    value={formData.saveTheDateTitle}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                    placeholder="Reception venue name"
+                    placeholder="Save the Date"
                   />
                 </div>
 
                 <div>
                   <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                    <i className="fas fa-location-dot mr-2"></i>
-                    Reception Address
+                    <i className="fas fa-comment mr-2"></i>
+                    Save The Date Message
                   </label>
-                  <textarea
-                    name="receptionAddress"
-                    value={formData.receptionAddress}
+                  <input
+                    type="text"
+                    name="saveTheDateMessage"
+                    value={formData.saveTheDateMessage}
                     onChange={handleInputChange}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900 resize-none"
-                    placeholder="Reception venue address..."
+                    className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
+                    placeholder="We can't wait to celebrate with you!"
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* Venue Information */}
-            <div className="space-y-6">
-              <div className="flex items-center mb-4">
-                <i className="fas fa-map-marker-alt text-amber-600 mr-3"></i>
-                <h3 className="text-xl font-semibold text-amber-800">Venue Information</h3>
-              </div>
-
-              <div>
-                <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                  <i className="fas fa-building mr-2"></i>
-                  Venue Name
-                </label>
-                <input
-                  type="text"
-                  name="venueName"
-                  value={formData.venueName}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900"
-                  placeholder="Wedding Venue Name"
-                />
-              </div>
-
-              <div>
-                <label className="flex items-center text-sm font-medium text-amber-800 mb-3">
-                  <i className="fas fa-location-dot mr-2"></i>
-                  Venue Address
-                </label>
-                <textarea
-                  name="venueAddress"
-                  value={formData.venueAddress}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white/70 text-amber-900 resize-none"
-                  placeholder="Complete venue address..."
-                />
               </div>
             </div>
 
@@ -341,10 +392,22 @@ const InvitedManagement: React.FC = () => {
             <div className="flex justify-center pt-8 border-t border-amber-200">
               <button
                 onClick={handleSave}
-                className="px-12 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-[#644F44] rounded-2xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium text-lg flex items-center"
+                disabled={isLoading}
+                className={`px-12 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium text-lg flex items-center ${
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                <i className="fas fa-save mr-3"></i>
-                Save Changes
+                {isLoading ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin mr-3"></i>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-save mr-3"></i>
+                    Save Changes
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -131,24 +131,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       // First, try to test connectivity
       console.log('🏥 Testing API connectivity...');
+      console.log('🔗 API_BASE_URL:', API_BASE_URL);
+      console.log('🔗 Health check URL:', `${API_BASE_URL}/health`);
+
       try {
         const healthResponse = await fetch(`${API_BASE_URL}/health`, {
           method: 'GET',
           mode: 'cors'
         });
         console.log('🏥 Health check status:', healthResponse.status);
+        console.log('🏥 Health check ok:', healthResponse.ok);
 
         if (!healthResponse.ok) {
-          throw new Error(`Health check failed: ${healthResponse.status}`);
+          const errorText = await healthResponse.text();
+          console.error('🏥 Health check error response:', errorText);
+          throw new Error(`Health check failed: ${healthResponse.status} - ${errorText}`);
         }
+
+        const healthData = await healthResponse.json();
+        console.log('✅ Health check successful:', healthData);
       } catch (healthError) {
         console.error('❌ API connectivity failed:', healthError);
+        console.error('❌ Error type:', healthError.constructor.name);
+        console.error('❌ Error message:', healthError.message);
+        console.error('❌ Error stack:', healthError.stack);
 
         // No fallback token - always require fresh login when API is unavailable
         console.log('❌ API unavailable and no fallback available');
         console.log('💡 Please ensure backend server is running and try again');
+        console.log('🔧 Current frontend port: window.location.origin =', window.location.origin);
 
-        return { success: false, error: 'Cannot connect to server. Please check your connection.' };
+        return { success: false, error: `Cannot connect to server: ${healthError.message}. Please check your connection.` };
       }
 
       // If connectivity is OK, proceed with normal login

@@ -240,8 +240,8 @@ const defaultWeddingData: WeddingSettings = {
     headerSubtitle: "We would be honored by your presence",
     eventTitle: "Wedding Ceremony",
     eventName: "Akad Nikah",
-    eventDate: "Jumat, 26 September 2025",
-    eventTime: "12.00 WIB",
+    eventDate: "2025-09-26",
+    eventTime: "12:00",
     venueName: "Gedung C Teknik, Universitas Riau",
     venueAddress: "Jl. HR. Soebrantas, Simpang Baru, Kec. Tampan, Kota Pekanbaru, Riau",
     googleMapsUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3989.668857089829!2d101.35013931475436!3d0.4637126997291157!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31aa706cd2fd9b5f%3A0x7a4f8e4f4f4f4f4f!2sUniversitas%20Riau!5e0!3m2!1sen!2sid!4v1635123456789!5m2!1sen!2sid",
@@ -312,9 +312,13 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
           }
         } else {
           // Load from local storage
+          console.log('🔄 Loading from local storage...');
           const result = await storageManager.getItem<WeddingSettings>(STORAGE_KEY);
           if (result.success && result.data) {
+            console.log('✅ Loaded data from storage:', result.data);
             setWeddingData({ ...defaultWeddingData, ...result.data });
+          } else {
+            console.log('❌ No data found in storage, using defaults');
           }
         }
       } catch (error) {
@@ -422,10 +426,15 @@ export const WeddingProvider: React.FC<WeddingProviderProps> = ({ children }) =>
   };
 
   const updateInvitedSettings = (invitedSettings: Partial<InvitedSettings>) => {
-    setWeddingData(prev => ({
-      ...prev,
-      invitedSettings: { ...prev.invitedSettings, ...invitedSettings }
-    }));
+    console.log('🔄 Updating invited settings in context:', invitedSettings);
+    setWeddingData(prev => {
+      const newData = {
+        ...prev,
+        invitedSettings: { ...prev.invitedSettings, ...invitedSettings }
+      };
+      console.log('✅ New wedding data after update:', newData);
+      return newData;
+    });
   };
 
   // Toggle API mode
