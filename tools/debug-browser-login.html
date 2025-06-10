@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Browser Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Browser Login</h1>
+        <p>This page will help debug the login issue by testing the API directly from the browser.</p>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" value="admin" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" value="admin" required>
+            </div>
+            
+            <button type="submit">🔐 Test Login</button>
+            <button type="button" onclick="testHealth()">🏥 Test Health</button>
+            <button type="button" onclick="clearResults()">🧹 Clear Results</button>
+        </form>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3001/api';
+        
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        async function testHealth() {
+            addResult('🏥 Testing health endpoint...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                addResult(`Health Status: ${response.status} ${response.statusText}`, 'info');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`Health Response: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    addResult(`Health Error: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                addResult(`Health Test Failed: ${error.message}`, 'error');
+                addResult(`Error Details: ${error.stack}`, 'error');
+            }
+        }
+        
+        async function testLogin(username, password) {
+            addResult('🔐 Testing login endpoint...', 'info');
+            addResult(`API URL: ${API_BASE_URL}/auth/login`, 'info');
+            addResult(`Origin: ${window.location.origin}`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors',
+                    body: JSON.stringify({ username, password })
+                });
+                
+                addResult(`Login Status: ${response.status} ${response.statusText}`, 'info');
+                addResult(`CORS Headers: ${response.headers.get('access-control-allow-origin')}`, 'info');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`Login Success: ${JSON.stringify(data, null, 2)}`, 'success');
+                    
+                    if (data.token) {
+                        addResult('✅ Token received successfully!', 'success');
+                        addResult('✅ Login functionality is working!', 'success');
+                        addResult('💡 The issue might be in the React app, not the API.', 'info');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    addResult(`Login Error: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                addResult(`Login Test Failed: ${error.message}`, 'error');
+                addResult(`Error Details: ${error.stack}`, 'error');
+                
+                if (error.message.includes('Failed to fetch')) {
+                    addResult('💡 "Failed to fetch" usually means:', 'info');
+                    addResult('   1. CORS issue (check server CORS config)', 'info');
+                    addResult('   2. Server not running (check backend)', 'info');
+                    addResult('   3. Network connectivity issue', 'info');
+                    addResult('   4. Firewall blocking the request', 'info');
+                }
+            }
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearResults();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            addResult('🚀 Starting debug test...', 'info');
+            addResult(`Timestamp: ${new Date().toISOString()}`, 'info');
+            addResult(`Browser: ${navigator.userAgent}`, 'info');
+            addResult('', 'info');
+            
+            // Test health first
+            await testHealth();
+            addResult('', 'info');
+            
+            // Then test login
+            await testLogin(username, password);
+        });
+        
+        // Auto-run health check on page load
+        window.addEventListener('load', () => {
+            addResult('🔍 Debug page loaded. Click "Test Login" to start debugging.', 'info');
+        });
+    </script>
+</body>
+</html>

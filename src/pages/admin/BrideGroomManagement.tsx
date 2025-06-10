@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -12,6 +12,119 @@ const BrideGroomManagement = () => {
   const [message, setMessage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Load fresh data from database when component mounts
+  useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounted
+
+    const loadFreshData = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('🔄 Loading fresh bride-groom data from database...');
+
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+        // Load couple data
+        const coupleResponse = await fetch(`${API_BASE_URL}/bride-groom`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Load detail settings data
+        const detailResponse = await fetch(`${API_BASE_URL}/bride-groom-detail`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Only update state if component is still mounted
+        if (!isMounted) return;
+
+        if (coupleResponse.ok) {
+          const coupleData = await coupleResponse.json();
+          if (coupleData.success && coupleData.data) {
+            console.log('✅ Fresh couple data loaded:', coupleData.data);
+
+            // Update couple data with fresh database data
+            const freshCoupleData = {
+              groomFirstName: coupleData.data.groom_first_name || '',
+              groomLastName: coupleData.data.groom_last_name || '',
+              groomFullName: coupleData.data.groom_full_name || '',
+              groomParentNames: coupleData.data.groom_parent_names || '',
+              groomPhoto: coupleData.data.groom_photo || 'public/images/BrideGroom/groom.jpg',
+              brideFirstName: coupleData.data.bride_first_name || '',
+              brideLastName: coupleData.data.bride_last_name || '',
+              brideFullName: coupleData.data.bride_full_name || '',
+              brideParentNames: coupleData.data.bride_parent_names || '',
+              bridePhoto: coupleData.data.bride_photo || 'public/images/BrideGroom/bride.jpg'
+            };
+
+            setCoupleData(freshCoupleData);
+            // Don't call updateCouple to avoid triggering context updates
+          }
+        }
+
+        if (detailResponse.ok) {
+          const detailData = await detailResponse.json();
+          if (detailData.success && detailData.data) {
+            console.log('✅ Fresh detail data loaded:', detailData.data);
+
+            // Update form data with fresh detail settings
+            const freshFormData = {
+              brideSettings: {
+                headerTitle: detailData.data.bride_header_title || 'The Bride',
+                headerSubtitle: detailData.data.bride_header_subtitle || 'A beautiful soul with a heart full of love',
+                label: detailData.data.bride_label || 'Calon Pengantin Wanita',
+                parentLabel: detailData.data.bride_parent_label || 'Putri dari',
+                fatherName: detailData.data.bride_father_name || '',
+                motherName: detailData.data.bride_mother_name || '',
+                quote: detailData.data.bride_quote || '',
+                photo: detailData.data.bride_photo || 'public/images/BrideGroom/bride.jpg'
+              },
+              groomSettings: {
+                headerTitle: detailData.data.groom_header_title || 'The Groom',
+                headerSubtitle: detailData.data.groom_header_subtitle || 'A gentle soul with strength and devotion',
+                label: detailData.data.groom_label || 'Calon Pengantin Pria',
+                parentLabel: detailData.data.groom_parent_label || 'Putra dari',
+                fatherName: detailData.data.groom_father_name || '',
+                motherName: detailData.data.groom_mother_name || '',
+                quote: detailData.data.groom_quote || '',
+                photo: detailData.data.groom_photo || 'public/images/BrideGroom/groom.jpg'
+              }
+            };
+
+            setFormData(freshFormData);
+            // Don't call updateBrideGroomSettings to avoid triggering context updates
+          }
+        }
+
+        console.log('✅ All fresh data loaded and updated');
+
+      } catch (error) {
+        console.error('❌ Error loading fresh data:', error);
+        console.log('⚠️ Using context data as fallback');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadFreshData();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
 
   const handleInputChange = (section: 'brideSettings' | 'groomSettings', field: string, value: string) => {
     setFormData(prev => ({
@@ -64,7 +177,9 @@ const BrideGroomManagement = () => {
 
       // Save couple data to database via API
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${API_BASE_URL}/bride-groom/1`, {
+
+      console.log('💾 Saving couple data...');
+      const coupleResponse = await fetch(`${API_BASE_URL}/bride-groom/1`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -82,22 +197,61 @@ const BrideGroomManagement = () => {
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Update context with new couple data
+      console.log('💾 Saving detail settings...');
+      const detailResponse = await fetch(`${API_BASE_URL}/bride-groom-detail/1`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          brideHeaderTitle: formData.brideSettings.headerTitle,
+          brideHeaderSubtitle: formData.brideSettings.headerSubtitle,
+          brideLabel: formData.brideSettings.label,
+          brideParentLabel: formData.brideSettings.parentLabel,
+          brideFatherName: formData.brideSettings.fatherName,
+          brideMotherName: formData.brideSettings.motherName,
+          brideQuote: formData.brideSettings.quote,
+          bridePhoto: formData.brideSettings.photo,
+          groomHeaderTitle: formData.groomSettings.headerTitle,
+          groomHeaderSubtitle: formData.groomSettings.headerSubtitle,
+          groomLabel: formData.groomSettings.label,
+          groomParentLabel: formData.groomSettings.parentLabel,
+          groomFatherName: formData.groomSettings.fatherName,
+          groomMotherName: formData.groomSettings.motherName,
+          groomQuote: formData.groomSettings.quote,
+          groomPhoto: formData.groomSettings.photo,
+        }),
+      });
+
+      // Check both responses
+      if (coupleResponse.ok && detailResponse.ok) {
+        const coupleData = await coupleResponse.json();
+        const detailData = await detailResponse.json();
+
+        if (coupleData.success && detailData.success) {
+          console.log('✅ Both couple data and detail settings saved successfully');
+
+          // Update context with new data
           updateCouple(coupleData);
-          // Update bride groom settings
           updateBrideGroomSettings(formData);
 
-          setMessage('✅ Data pengantin dan pengaturan berhasil disimpan!');
+          setMessage('✅ Data pengantin dan pengaturan berhasil disimpan ke database!');
           setTimeout(() => setMessage(''), 5000);
         } else {
-          throw new Error(data.error || 'Failed to save couple data');
+          throw new Error(coupleData.error || detailData.error || 'Failed to save data');
         }
       } else {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        let errorMessage = 'Failed to save data: ';
+        if (!coupleResponse.ok) {
+          const coupleError = await coupleResponse.text();
+          errorMessage += `Couple data error (${coupleResponse.status}): ${coupleError}. `;
+        }
+        if (!detailResponse.ok) {
+          const detailError = await detailResponse.text();
+          errorMessage += `Detail settings error (${detailResponse.status}): ${detailError}.`;
+        }
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error saving bride groom data:', error);
@@ -218,6 +372,13 @@ const BrideGroomManagement = () => {
             </div>
           </div>
 
+          {loading && (
+            <div className="mx-8 mt-6 p-4 rounded-xl border shadow-sm flex items-center bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-300">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+              Loading fresh data from database...
+            </div>
+          )}
+
           {message && (
             <div className={`mx-8 mt-6 p-4 rounded-xl border shadow-sm flex items-center ${
               message.includes('berhasil')
@@ -287,18 +448,6 @@ const BrideGroomManagement = () => {
                       />
                       <p className="text-xs text-gray-500 mt-1">Otomatis dibuat dari nama depan + belakang</p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nama Orang Tua
-                      </label>
-                      <input
-                        type="text"
-                        value={coupleData.groomParentNames}
-                        onChange={(e) => handleCoupleInputChange('groomParentNames', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Bapak Ahmad & Ibu Siti"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -347,18 +496,6 @@ const BrideGroomManagement = () => {
                         readOnly
                       />
                       <p className="text-xs text-gray-500 mt-1">Otomatis dibuat dari nama depan + belakang</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nama Orang Tua
-                      </label>
-                      <input
-                        type="text"
-                        value={coupleData.brideParentNames}
-                        onChange={(e) => handleCoupleInputChange('brideParentNames', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
-                        placeholder="Bapak Budi & Ibu Rina"
-                      />
                     </div>
                   </div>
                 </div>

@@ -1,0 +1,105 @@
+{
+  "timestamp": "2025-06-10T18:00:26.757Z",
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "successRate": 100
+  },
+  "details": [
+    {
+      "name": "Database Connection",
+      "success": true,
+      "message": "Database connection successful",
+      "details": null
+    },
+    {
+      "name": "Database Schema",
+      "success": true,
+      "message": "All 11 required tables exist",
+      "details": {
+        "existingTables": 17,
+        "requiredTables": 11
+      }
+    },
+    {
+      "name": "Admin User Exists",
+      "success": true,
+      "message": "Admin user exists and is active",
+      "details": {
+        "userId": 1,
+        "username": "admin"
+      }
+    },
+    {
+      "name": "API Health Check",
+      "success": true,
+      "message": "API health check passed",
+      "details": {
+        "status": "OK",
+        "message": "Wedding Invitation API Server with Authentication",
+        "timestamp": "2025-06-10T18:00:26.457Z",
+        "server": "http://localhost:3001",
+        "endpoints": {
+          "login": "/api/auth/login",
+          "settings": "/api/wedding-settings",
+          "dashboard": "/api/dashboard/stats",
+          "invitedSettings": "/api/invited-settings",
+          "invitedPublic": "/api/invited-settings/public"
+        }
+      }
+    },
+    {
+      "name": "Authentication",
+      "success": true,
+      "message": "Authentication successful",
+      "details": {
+        "hasToken": true,
+        "user": {
+          "id": 1,
+          "username": "admin",
+          "email": "admin@wedding-invitation.com",
+          "fullName": "Wedding Administrator",
+          "role": "super_admin"
+        }
+      }
+    },
+    {
+      "name": "Token Validation",
+      "success": true,
+      "message": "Token validation successful",
+      "details": {
+        "success": true,
+        "user": {
+          "id": 1,
+          "username": "admin",
+          "fullName": "Wedding Administrator",
+          "role": "super_admin"
+        }
+      }
+    },
+    {
+      "name": "Guest CRUD Operations",
+      "success": true,
+      "message": "Guest CRUD operations successful",
+      "details": {
+        "guestId": 21,
+        "operations": [
+          "CREATE",
+          "READ",
+          "UPDATE",
+          "DELETE"
+        ]
+      }
+    },
+    {
+      "name": "File Structure",
+      "success": true,
+      "message": "All 7 critical files exist",
+      "details": {
+        "existing": 7,
+        "total": 7
+      }
+    }
+  ]
+}

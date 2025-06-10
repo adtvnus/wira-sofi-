@@ -129,13 +129,6 @@ const Quotes = () => {
           >
             Words of Love
           </h2>
-
-          <p
-            className="text-sm tracking-wide opacity-70"
-            style={{ color: "#644F44" }}
-          >
-            Kata-kata indah tentang cinta dan pernikahan
-          </p>
         </div>
 
         {/* Quote Image and Content Section */}

@@ -1057,6 +1057,56 @@ const galleryUpload = multer({
   }
 });
 
+// Gallery Management endpoints
+// Main gallery endpoint - get all gallery data
+app.get('/api/gallery', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get gallery settings
+    const [settings] = await connection.query(`
+      SELECT header_title, header_subtitle, bottom_quote, is_active
+      FROM gallery_text_settings
+      WHERE wedding_id = 1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    // Get gallery images
+    const [images] = await connection.query(`
+      SELECT
+        id, image_src, absolute_path, image_alt, image_type, image_size,
+        display_order, is_active, created_at, updated_at
+      FROM gallery_images
+      WHERE wedding_id = 1
+      ORDER BY display_order ASC, created_at DESC
+    `);
+
+    await connection.end();
+
+    const gallerySettings = settings.length > 0 ? settings[0] : {
+      header_title: 'Our Gallery',
+      header_subtitle: 'Capturing beautiful moments of our special day',
+      bottom_quote: 'Every picture tells a story of love',
+      is_active: true
+    };
+
+    res.json({
+      success: true,
+      data: {
+        settings: gallerySettings,
+        images: images
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching gallery data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch gallery data'
+    });
+  }
+});
+
 // Gallery Settings endpoints
 // Get gallery settings (header, subtitle, bottom quote)
 app.get('/api/gallery/settings', authenticateToken, async (req, res) => {
@@ -1902,6 +1952,129 @@ app.put('/api/bride-groom/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Bride Groom Detail Settings endpoints
+app.get('/api/bride-groom-detail', authenticateToken, async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get bride groom detail settings
+    const [rows] = await connection.query(`
+      SELECT * FROM bride_groom_detail_settings
+      WHERE wedding_id = 1 AND is_active = TRUE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+
+    await connection.end();
+
+    if (rows.length > 0) {
+      res.json({ success: true, data: rows[0] });
+    } else {
+      // Return default structure if no data found
+      res.json({
+        success: true,
+        data: {
+          bride_header_title: 'The Bride',
+          bride_header_subtitle: 'A beautiful soul with a heart full of love',
+          bride_label: 'Calon Pengantin Wanita',
+          bride_parent_label: 'Putri dari',
+          bride_father_name: 'Bapak Adit',
+          bride_mother_name: 'Ibu Shikimori',
+          bride_quote: 'Cinta sejati dimulai ketika tidak ada yang diharapkan sebagai balasan',
+          bride_photo: 'public/images/BrideGroom/bride.jpg',
+          groom_header_title: 'The Groom',
+          groom_header_subtitle: 'A gentle soul with strength and devotion',
+          groom_label: 'Calon Pengantin Pria',
+          groom_parent_label: 'Putra dari',
+          groom_father_name: 'Bapak Agata',
+          groom_mother_name: 'Ibu Ayaka',
+          groom_quote: 'Cinta sejati adalah ketika kamu menemukan seseorang yang membuatmu menjadi versi terbaik dari dirimu',
+          groom_photo: 'public/images/BrideGroom/groom.jpg'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching bride groom detail data:', error);
+    res.status(500).json({ error: 'Failed to fetch bride groom detail data' });
+  }
+});
+
+app.put('/api/bride-groom-detail/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      brideHeaderTitle, brideHeaderSubtitle, brideLabel, brideParentLabel,
+      brideFatherName, brideMotherName, brideQuote, bridePhoto,
+      groomHeaderTitle, groomHeaderSubtitle, groomLabel, groomParentLabel,
+      groomFatherName, groomMotherName, groomQuote, groomPhoto
+    } = req.body;
+
+    console.log('🔍 Bride Groom Detail Update Request:');
+    console.log('   ID:', id);
+    console.log('   Bride Details:', { brideHeaderTitle, brideLabel, brideFatherName, brideMotherName });
+    console.log('   Groom Details:', { groomHeaderTitle, groomLabel, groomFatherName, groomMotherName });
+
+    const connection = await getConnection();
+
+    // Check if record exists
+    const [existing] = await connection.query(`
+      SELECT id FROM bride_groom_detail_settings WHERE wedding_id = ? AND is_active = TRUE
+    `, [id]);
+
+    if (existing.length > 0) {
+      // Update existing record
+      console.log('   📝 Updating existing detail record...');
+      await connection.query(`
+        UPDATE bride_groom_detail_settings SET
+          bride_header_title = ?, bride_header_subtitle = ?, bride_label = ?, bride_parent_label = ?,
+          bride_father_name = ?, bride_mother_name = ?, bride_quote = ?, bride_photo = ?,
+          groom_header_title = ?, groom_header_subtitle = ?, groom_label = ?, groom_parent_label = ?,
+          groom_father_name = ?, groom_mother_name = ?, groom_quote = ?, groom_photo = ?,
+          updated_at = NOW()
+        WHERE wedding_id = ? AND is_active = TRUE
+      `, [
+        brideHeaderTitle, brideHeaderSubtitle, brideLabel, brideParentLabel,
+        brideFatherName, brideMotherName, brideQuote, bridePhoto,
+        groomHeaderTitle, groomHeaderSubtitle, groomLabel, groomParentLabel,
+        groomFatherName, groomMotherName, groomQuote, groomPhoto,
+        id
+      ]);
+    } else {
+      // Insert new record
+      console.log('   ➕ Creating new detail record...');
+      await connection.query(`
+        INSERT INTO bride_groom_detail_settings (
+          wedding_id, bride_header_title, bride_header_subtitle, bride_label, bride_parent_label,
+          bride_father_name, bride_mother_name, bride_quote, bride_photo,
+          groom_header_title, groom_header_subtitle, groom_label, groom_parent_label,
+          groom_father_name, groom_mother_name, groom_quote, groom_photo,
+          created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        id, brideHeaderTitle, brideHeaderSubtitle, brideLabel, brideParentLabel,
+        brideFatherName, brideMotherName, brideQuote, bridePhoto,
+        groomHeaderTitle, groomHeaderSubtitle, groomLabel, groomParentLabel,
+        groomFatherName, groomMotherName, groomQuote, groomPhoto,
+        req.user.id
+      ]);
+    }
+
+    await connection.end();
+
+    console.log('✅ Bride groom detail data updated successfully');
+    res.json({ success: true, message: 'Bride groom detail data updated successfully' });
+
+  } catch (error) {
+    console.error('❌ Error updating bride groom detail data:', error);
+    console.error('   Error details:', error.message);
+    console.error('   Stack trace:', error.stack);
+    res.status(500).json({
+      error: 'Failed to update bride groom detail data',
+      details: error.message
+    });
+  }
+});
+
 // Global error handler for multer and other errors
 app.use((error, req, res, next) => {
   console.error('❌ Global error handler:', error);
@@ -1950,9 +2123,10 @@ app.listen(PORT, () => {
   console.log(`📊 Dashboard API: http://localhost:${PORT}/api/dashboard/stats`);
   console.log(`💌 Invited Settings API: http://localhost:${PORT}/api/invited-settings`);
   console.log(`🌐 Public Invited API: http://localhost:${PORT}/api/invited-settings/public`);
-  console.log('\n🔐 Default Admin Credentials:');
-  console.log('   Username: admin');
-  console.log('   Password: admin');
+  console.log('\n🔐 Admin Credentials:');
+  console.log(`   Username: ${process.env.DEFAULT_ADMIN_USERNAME || 'admin'}`);
+  console.log(`   Password: ${process.env.DEFAULT_ADMIN_PASSWORD || 'admin'}`);
+  console.log('   ⚠️  CHANGE THESE IN PRODUCTION!');
   console.log('\n🔄 Server running with NODEMON - Auto-restart enabled!');
   console.log('💡 Edit any file in backend/ or src/ to see auto-restart in action!');
   console.log('🔧 Debug: Server restarted at', new Date().toISOString());
