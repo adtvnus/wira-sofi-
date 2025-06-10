@@ -2,17 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 import AdminLayout from '../../layouts/AdminLayout';
 
-interface InvitedEvent {
-  id: string;
-  eventTitle: string;
-  eventName: string;
-  eventDate: string;
-  eventTime: string;
-  venueName: string;
-  venueAddress: string;
-  googleMapsUrl: string;
-}
-
 const InvitedManagement: React.FC = () => {
   const { weddingData, updateInvitedSettings } = useWedding();
   const { invitedSettings } = weddingData;
@@ -76,7 +65,7 @@ const InvitedManagement: React.FC = () => {
 
       console.log('🔍 Saving invited settings:', formData);
 
-      // Check if token exists (use correct key from AuthContext)
+      // Check if token exists - use the correct key from AuthContext
       const token = localStorage.getItem('auth-token');
       console.log('🔑 Token exists:', !!token);
       console.log('🔑 Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
@@ -121,11 +110,14 @@ const InvitedManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Network/Fetch error:', error);
-      console.error('❌ Error details:', error.message);
+
+      // Type-safe error handling
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('❌ Error details:', errorMessage);
 
       // Fallback: save to context only
       updateInvitedSettings(formData);
-      setMessage(`❌ Network error: ${error.message}. Settings saved locally only.`);
+      setMessage(`❌ Network error: ${errorMessage}. Settings saved locally only.`);
     } finally {
       setIsLoading(false);
     }
