@@ -1,13 +1,86 @@
+import { useState, useEffect } from "react";
 import { useWedding } from "../../contexts/WeddingContext";
 
 const Story = () => {
   const { weddingData, isLoading } = useWedding();
-  const storySettings = weddingData.storySettings;
+  const [apiStorySettings, setApiStorySettings] = useState(null);
+  const [isLoadingStory, setIsLoadingStory] = useState(true);
 
-  // Get active timeline items
-  const activeTimelineItems = storySettings.timelineItems.filter(item => item.isActive);
+  // Load story settings from API
+  useEffect(() => {
+    loadStorySettings();
 
-  if (isLoading) {
+    // Set up polling for real-time updates (every 5 seconds)
+    const pollInterval = setInterval(() => {
+      loadStorySettings(false); // Don't show loading state for polling
+    }, 5000);
+
+    // Refresh when window gains focus (user switches back to tab)
+    const handleFocus = () => {
+      loadStorySettings(false); // Don't show loading state for focus refresh
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Cleanup
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  const loadStorySettings = async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setIsLoadingStory(true);
+      }
+
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+      const response = await fetch(`${API_BASE_URL}/story-settings/public`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔍 Raw API Response:', data);
+        if (data.success && data.data) {
+          setApiStorySettings(data.data);
+          console.log('✅ Story settings loaded from database:', data.data);
+          console.log('📊 Timeline items count:', data.data.timelineItems?.length || 0);
+          console.log('📊 Active timeline items:', data.data.timelineItems?.filter((item: any) => item.isActive)?.length || 0);
+        } else {
+          console.log('❌ API response not successful or no data:', data);
+        }
+      } else {
+        console.log('❌ API response not OK:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading story settings:', error);
+    } finally {
+      if (showLoading) {
+        setIsLoadingStory(false);
+      }
+    }
+  };
+
+  // Use API data if available, fallback to context data
+  const storySettings = apiStorySettings || weddingData.storySettings;
+
+  console.log('🔍 Story Settings Debug:', {
+    apiStorySettings,
+    contextStorySettings: weddingData.storySettings,
+    finalStorySettings: storySettings,
+    hasTimelineItems: storySettings?.timelineItems ? true : false,
+    timelineItemsLength: storySettings?.timelineItems?.length || 0
+  });
+
+  // Get active timeline items with safety check
+  const activeTimelineItems = storySettings?.timelineItems?.filter(item => item.isActive) || [];
+
+  if (isLoading || isLoadingStory) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -24,6 +97,18 @@ const Story = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p style={{ color: "#644F44" }}>No story timeline available</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {storySettings?.timelineItems ?
+              `Found ${storySettings.timelineItems.length} timeline items, but none are active` :
+              'No timeline data loaded from database'
+            }
+          </p>
+          <button
+            onClick={() => loadStorySettings(true)}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Reload Story Data
+          </button>
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 import { TimelineItem } from '../../types/wedding';
 import AdminLayout from '../../layouts/AdminLayout';
@@ -7,7 +7,41 @@ const StoryManagement = () => {
   const { weddingData, updateStorySettings } = useWedding();
   const [formData, setFormData] = useState(weddingData.storySettings);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+
+  // Load story settings from database when component mounts
+  useEffect(() => {
+    loadStorySettings();
+  }, []);
+
+  const loadStorySettings = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth-token');
+
+      const response = await fetch(`${API_BASE_URL}/story-settings`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setFormData(data.data);
+          console.log('✅ Story settings loaded from database:', data.data);
+        }
+      } else {
+        console.log('⚠️ Using default story settings from context');
+      }
+    } catch (error) {
+      console.error('Error loading story settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -73,13 +107,48 @@ const StoryManagement = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      updateStorySettings(formData);
-      setMessage('Story settings berhasil disimpan!');
-      setTimeout(() => setMessage(''), 3000);
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth-token');
+
+      console.log('💾 Saving story settings to database:', formData);
+
+      // Map frontend data to backend expected format
+      const dataToSend = {
+        title: formData.headerTitle,
+        subtitle: formData.headerSubtitle,
+        timelineItems: formData.timelineItems
+      };
+
+      console.log('📤 Data being sent to API:', dataToSend);
+
+      const response = await fetch(`${API_BASE_URL}/story-settings`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Update context as well for immediate UI update
+          updateStorySettings(formData);
+
+          setMessage('✅ Story settings berhasil disimpan ke database!');
+          console.log('✅ Story settings saved successfully to database');
+          setTimeout(() => setMessage(''), 5000);
+        } else {
+          throw new Error(data.message || 'Failed to save story settings');
+        }
+      } else {
+        throw new Error('Failed to save story settings to database');
+      }
     } catch (error) {
-      setMessage('Terjadi kesalahan saat menyimpan story settings.');
+      setMessage('❌ Terjadi kesalahan saat menyimpan story settings ke database.');
       console.error('Error saving story settings:', error);
     } finally {
       setIsSubmitting(false);
@@ -97,16 +166,31 @@ const StoryManagement = () => {
 
   const iconOptions = ['👫', '💕', '💍', '👰🤵', '❤️', '💖', '🌹', '💐', '🎉', '✨', '🌟', '💫'];
 
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-lg text-gray-600">Loading story settings...</p>
+            </div>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout>
       <div className="max-w-6xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-8">Manajemen Story Timeline</h1>
-          
+
           {message && (
             <div className={`mb-6 p-4 rounded-md ${
-              message.includes('berhasil') 
-                ? 'bg-green-100 text-green-700 border border-green-300' 
+              message.includes('berhasil')
+                ? 'bg-green-100 text-green-700 border border-green-300'
                 : 'bg-red-100 text-red-700 border border-red-300'
             }`}>
               {message}
@@ -204,18 +288,6 @@ const StoryManagement = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Tahun
-                        </label>
-                        <input
-                          type="text"
-                          value={item.year}
-                          onChange={(e) => handleTimelineChange(index, 'year', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="2024"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
                           Judul
                         </label>
                         <input
@@ -224,6 +296,18 @@ const StoryManagement = () => {
                           onChange={(e) => handleTimelineChange(index, 'title', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="First Meet"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tahun
+                        </label>
+                        <input
+                          type="text"
+                          value={item.year}
+                          onChange={(e) => handleTimelineChange(index, 'year', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="2024"
                         />
                       </div>
                       <div>
@@ -328,7 +412,7 @@ const StoryManagement = () => {
             </div>
             
             <div className="space-y-6">
-              {formData.timelineItems.filter(item => item.isActive).slice(0, 3).map((item, index) => (
+              {formData.timelineItems.filter(item => item.isActive).slice(0, 3).map((item) => (
                 <div key={item.id} className="flex items-center space-x-4 p-4 bg-white rounded-lg">
                   <div className="flex-shrink-0">
                     <div className={`w-12 h-12 bg-gradient-to-br ${item.color} rounded-full flex items-center justify-center`}>

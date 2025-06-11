@@ -1451,6 +1451,209 @@ app.post('/api/quotes/upload-image', authenticateToken, (req, res, next) => {
   }
 });
 
+// Story Settings endpoints
+app.get('/api/story-settings', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 Story settings requested');
+
+    const connection = await getConnection();
+
+    // Get story settings (using correct column names)
+    const [storyRows] = await connection.query(`
+      SELECT id, header_title as title, header_subtitle as subtitle,
+             is_active, created_at, updated_at
+      FROM story_settings
+      WHERE wedding_id = 1 AND is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `);
+
+    // Get timeline items
+    const [timelineRows] = await connection.query(`
+      SELECT id, year, title, date, description, icon, color, bg_color,
+             display_order, is_active, created_at, updated_at
+      FROM story_timeline_items
+      WHERE wedding_id = 1 AND is_active = 1
+      ORDER BY display_order ASC
+    `);
+
+    await connection.end();
+
+    const storySettings = storyRows.length > 0 ? storyRows[0] : {
+      title: 'Our Love Story',
+      subtitle: 'Perjalanan Cinta Kami'
+    };
+
+    const timelineItems = timelineRows.map(item => ({
+      id: item.id.toString(),
+      year: item.year,
+      title: item.title,
+      date: item.date,
+      description: item.description,
+      icon: item.icon,
+      color: item.color,
+      bgColor: item.bg_color || 'from-rose-100/20 to-pink-100/20',
+      isActive: item.is_active === 1
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        ...storySettings,
+        timelineItems
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching story settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch story settings'
+    });
+  }
+});
+
+app.put('/api/story-settings', authenticateToken, async (req, res) => {
+  try {
+    console.log('📝 Story settings update requested:', req.body);
+
+    const { title, subtitle, timelineItems } = req.body;
+
+    const connection = await getConnection();
+
+    // Update story settings (using correct column names)
+    await connection.query(`
+      UPDATE story_settings
+      SET header_title = ?, header_subtitle = ?, updated_at = NOW()
+      WHERE wedding_id = 1 AND is_active = 1
+    `, [title, subtitle]);
+
+    // If no rows were updated, insert new record
+    const [updateResult] = await connection.query(`
+      SELECT ROW_COUNT() as affected_rows
+    `);
+
+    if (updateResult[0].affected_rows === 0) {
+      await connection.query(`
+        INSERT INTO story_settings (wedding_id, header_title, header_subtitle, is_active, created_at, updated_at)
+        VALUES (1, ?, ?, 1, NOW(), NOW())
+      `, [title, subtitle]);
+    }
+
+    // Update timeline items
+    if (timelineItems && Array.isArray(timelineItems)) {
+      // First, deactivate all existing timeline items
+      await connection.query(`
+        UPDATE story_timeline_items
+        SET is_active = 0, updated_at = NOW()
+        WHERE wedding_id = 1
+      `);
+
+      // Insert or update timeline items
+      for (let i = 0; i < timelineItems.length; i++) {
+        const item = timelineItems[i];
+
+        if (item.id && !isNaN(parseInt(item.id))) {
+          // Update existing item
+          await connection.query(`
+            UPDATE story_timeline_items
+            SET year = ?, title = ?, date = ?, description = ?, icon = ?,
+                color = ?, bg_color = ?, display_order = ?, is_active = 1, updated_at = NOW()
+            WHERE id = ? AND wedding_id = 1
+          `, [
+            item.year, item.title, item.date, item.description, item.icon,
+            item.color, item.bgColor, i + 1, parseInt(item.id)
+          ]);
+        } else {
+          // Insert new item
+          await connection.query(`
+            INSERT INTO story_timeline_items
+            (wedding_id, year, title, date, description, icon, color, bg_color,
+             display_order, is_active, created_at, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+          `, [
+            item.year, item.title, item.date, item.description, item.icon,
+            item.color, item.bgColor, i + 1
+          ]);
+        }
+      }
+    }
+
+    await connection.end();
+
+    console.log('✅ Story settings updated successfully');
+
+    res.json({
+      success: true,
+      message: 'Story settings updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating story settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update story settings'
+    });
+  }
+});
+
+// Public story settings endpoint (for user pages)
+app.get('/api/story-settings/public', async (req, res) => {
+  try {
+    const connection = await getConnection();
+
+    // Get story settings (using correct column names)
+    const [storyRows] = await connection.query(`
+      SELECT header_title as title, header_subtitle as subtitle
+      FROM story_settings
+      WHERE wedding_id = 1 AND is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `);
+
+    // Get active timeline items
+    const [timelineRows] = await connection.query(`
+      SELECT year, title, date, description, icon, color, bg_color, display_order
+      FROM story_timeline_items
+      WHERE wedding_id = 1 AND is_active = 1
+      ORDER BY display_order ASC
+    `);
+
+    await connection.end();
+
+    const storySettings = storyRows.length > 0 ? storyRows[0] : {
+      title: 'Our Love Story',
+      subtitle: 'Perjalanan Cinta Kami'
+    };
+
+    const timelineItems = timelineRows.map(item => ({
+      year: item.year,
+      title: item.title,
+      date: item.date,
+      description: item.description,
+      icon: item.icon,
+      color: item.color,
+      bgColor: item.bg_color || 'from-rose-100/20 to-pink-100/20',
+      isActive: true // Since we only query active items, all should be active
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        ...storySettings,
+        timelineItems
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching public story settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch story settings'
+    });
+  }
+});
+
 // Thanks Settings endpoints
 app.get('/api/thanks-settings', async (req, res) => {
   try {
