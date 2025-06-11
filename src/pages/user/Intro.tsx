@@ -4,12 +4,16 @@ import { useWedding } from "../../contexts/WeddingContext";
 import { useGuestName } from "../../hooks/useGuestName";
 
 const Intro = () => {
-  const { weddingData, isLoading } = useWedding();
+  const { weddingData, isLoading, reloadActiveSettings } = useWedding();
   const { getCurrentGuestUrl, displayName: guestName } = useGuestName();
   const navigate = useNavigate();
 
-  // Optional: Handle legacy URL parameters
+  // Load fresh data from database and handle legacy URL parameters
   useEffect(() => {
+    // Load fresh wedding data from database
+    reloadActiveSettings();
+
+    // Handle legacy URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const guestParam = urlParams.get('guest');
     if (guestParam) {

@@ -1,8 +1,14 @@
+import { useEffect } from "react";
 import { useWedding } from "../../contexts/WeddingContext";
 
 const Groom = () => {
-  const { weddingData, isLoading } = useWedding();
+  const { weddingData, isLoading, reloadActiveSettings } = useWedding();
   const groomSettings = weddingData.brideGroomSettings.groomSettings;
+
+  // Load fresh data from database when component mounts
+  useEffect(() => {
+    reloadActiveSettings();
+  }, []);
 
   if (isLoading) {
     return (

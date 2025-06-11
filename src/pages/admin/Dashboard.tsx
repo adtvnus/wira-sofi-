@@ -6,11 +6,13 @@ import { useWedding } from "../../contexts/WeddingContext";
 import apiService from '../../services/apiService';
 
 const Dashboard = () => {
-  const { weddingData } = useWedding();
+  const { weddingData, reloadActiveSettings } = useWedding();
   const [guestCount, setGuestCount] = useState(0);
 
   useEffect(() => {
     loadDashboardData();
+    // Force reload wedding data from API when dashboard loads
+    reloadActiveSettings();
   }, []);
 
   const loadDashboardData = async () => {

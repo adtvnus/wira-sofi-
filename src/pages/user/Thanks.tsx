@@ -3,13 +3,16 @@ import { useState, useEffect } from 'react';
 import { useWedding } from '../../contexts/WeddingContext';
 
 const Thanks = () => {
-  const { weddingData } = useWedding();
+  const { weddingData, reloadActiveSettings } = useWedding();
   const { thanksSettings, couple } = weddingData;
   const [apiThanksSettings, setApiThanksSettings] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load thanks settings from API
+  // Load thanks settings from API and fresh wedding data
   useEffect(() => {
+    // Load fresh wedding data from database first
+    reloadActiveSettings();
+    // Then load thanks settings
     loadThanksSettings();
   }, []);
 

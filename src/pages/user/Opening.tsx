@@ -3,13 +3,12 @@ import { useWedding } from "../../contexts/WeddingContext";
 import { useGuestName } from "../../hooks/useGuestName";
 
 const Opening = () => {
-  const { weddingData, isLoading } = useWedding();
+  const { weddingData, isLoading, reloadActiveSettings } = useWedding();
   const { displayName: guestName } = useGuestName();
 
-  // Optional: Update context if needed for other components
-  // This is for backward compatibility
+  // Load fresh data from database when component mounts
   useEffect(() => {
-    // You can add logic here if other components still need the context
+    reloadActiveSettings();
   }, []);
 
   if (isLoading) {

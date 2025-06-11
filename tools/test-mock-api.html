@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock API Service Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid #4CAF50;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .info {
+            color: #2196F3;
+            font-weight: bold;
+        }
+        .warning {
+            color: #FF9800;
+            font-weight: bold;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid #4CAF50;
+        }
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Mock API Service - No Backend Required!</h1>
+        
+        <div class="section">
+            <h2>✅ System Status</h2>
+            <p><span class="success">✅ Login System:</span> Simplified (no API calls)</p>
+            <p><span class="success">✅ API Service:</span> Mock implementation (no backend)</p>
+            <p><span class="success">✅ Data Storage:</span> In-memory (browser session)</p>
+            <p><span class="success">✅ Network Dependency:</span> None required</p>
+        </div>
+
+        <div class="section">
+            <h2>🔧 What Was Fixed</h2>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h3>🔐 Login System</h3>
+                    <p>✅ No API calls</p>
+                    <p>✅ Instant validation</p>
+                    <p>✅ Local session storage</p>
+                </div>
+                <div class="feature-item">
+                    <h3>📊 API Service</h3>
+                    <p>✅ Mock data responses</p>
+                    <p>✅ Simulated delays</p>
+                    <p>✅ No network requests</p>
+                </div>
+                <div class="feature-item">
+                    <h3>💾 Data Management</h3>
+                    <p>✅ In-memory storage</p>
+                    <p>✅ CRUD operations</p>
+                    <p>✅ Persistent during session</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🎯 Error Handling</h3>
+                    <p>✅ No network errors</p>
+                    <p>✅ No token validation</p>
+                    <p>✅ Consistent responses</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Available Mock APIs</h2>
+            <div class="code-block">
+// Guest Management
+✅ getGuests() - Returns mock guest list
+✅ addGuest(data) - Adds guest to mock data
+✅ updateGuest(id, data) - Updates guest in mock data
+✅ deleteGuest(id) - Removes guest from mock data
+
+// Wedding Settings
+✅ getWeddingSettings() - Returns mock wedding settings
+✅ updateWeddingSettings(data) - Updates mock settings
+✅ getAllWeddingSettings() - Returns all settings
+
+// Bride & Groom
+✅ getBrideGroomData() - Returns mock bride/groom data
+✅ updateBrideGroomData(data) - Updates mock data
+
+// RSVP
+✅ submitRsvp(data) - Submits mock RSVP
+✅ getRsvpResponses() - Returns mock RSVP list
+
+// Gallery, Story, Quotes
+✅ getGallery() - Returns mock gallery
+✅ getStorySettings() - Returns mock story
+✅ getQuotes() - Returns mock quotes
+
+// Health Check
+✅ testConnection() - Returns mock health status
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 How It Works</h2>
+            <ol>
+                <li><span class="info">Login:</span> Simple credential check (admin/admin)</li>
+                <li><span class="info">Token:</span> Generated locally (simple-token-xxx)</li>
+                <li><span class="info">API Calls:</span> Return mock data instantly</li>
+                <li><span class="info">Data:</span> Stored in memory during session</li>
+                <li><span class="info">Persistence:</span> Data persists until page refresh</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>💡 Benefits</h2>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h3>🚀 Performance</h3>
+                    <p>✅ Instant responses</p>
+                    <p>✅ No network latency</p>
+                    <p>✅ No server dependency</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🔧 Development</h3>
+                    <p>✅ No backend setup needed</p>
+                    <p>✅ No database required</p>
+                    <p>✅ Easy testing</p>
+                </div>
+                <div class="feature-item">
+                    <h3>🛡️ Reliability</h3>
+                    <p>✅ No network errors</p>
+                    <p>✅ No connection issues</p>
+                    <p>✅ Always available</p>
+                </div>
+                <div class="feature-item">
+                    <h3>📱 User Experience</h3>
+                    <p>✅ Fast interactions</p>
+                    <p>✅ No loading delays</p>
+                    <p>✅ Smooth operation</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Test Instructions</h2>
+            <ol>
+                <li><span class="success">Open:</span> http://localhost:5174/admin</li>
+                <li><span class="success">Login:</span> admin / admin</li>
+                <li><span class="success">Navigate:</span> Try all admin pages</li>
+                <li><span class="success">Test:</span> Add/edit/delete data</li>
+                <li><span class="success">Verify:</span> No network errors</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>📊 Expected Results</h2>
+            <p><span class="success">✅ Login:</span> Instant success with admin/admin</p>
+            <p><span class="success">✅ Bride-Groom Management:</span> Save works without errors</p>
+            <p><span class="success">✅ Guest Management:</span> CRUD operations work</p>
+            <p><span class="success">✅ Wedding Settings:</span> Updates save successfully</p>
+            <p><span class="success">✅ All Pages:</span> Load without network errors</p>
+        </div>
+
+        <div class="section">
+            <h2>⚠️ Limitations</h2>
+            <p><span class="warning">⚠️ Data Reset:</span> Data resets on page refresh</p>
+            <p><span class="warning">⚠️ No Persistence:</span> Changes not saved to database</p>
+            <p><span class="warning">⚠️ Session Only:</span> Data exists only during browser session</p>
+            <p><span class="info">💡 For Production:</span> Replace with real API endpoints</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <h2>🎊 Ready to Test!</h2>
+            <p><span class="success">Mock API system is now active!</span></p>
+            <p><span class="info">No more "Invalid token" or network errors!</span></p>
+            <p><span class="success">All admin features should work smoothly!</span></p>
+        </div>
+    </div>
+</body>
+</html>
