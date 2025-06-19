@@ -188,7 +188,7 @@ const Gallery = () => {
                     src={image.image_src}
                     alt={image.image_alt}
                     className="relative z-10 w-full h-full object-cover rounded-2xl transition-transform duration-700 group-hover:scale-110"
-                    onLoad={() => handleImageLoad(image.id)}
+                    onLoad={() => handleImageLoad(image.id.toString())}
                   />
 
                   {/* Size badge */}

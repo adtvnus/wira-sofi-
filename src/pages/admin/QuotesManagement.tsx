@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminLayout from '../../layouts/AdminLayout';
+import apiService from '../../services/apiService';
 
 interface Quote {
   id: number;
@@ -46,6 +47,11 @@ const QuotesManagement = () => {
 
   const loadQuotes = async () => {
     try {
+      console.log('🔄 Loading quotes...');
+      console.log('🔑 Token available:', !!token);
+      console.log('🔑 Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
+      console.log('🌐 API URL:', `${API_BASE_URL}/quotes`);
+
       const response = await fetch(`${API_BASE_URL}/quotes`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -53,15 +59,27 @@ const QuotesManagement = () => {
         },
       });
 
+      console.log('📊 Response status:', response.status, response.statusText);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('📥 Response data:', data);
+
         if (data.success) {
           setQuotes(data.data);
+          console.log('✅ Quotes loaded successfully:', data.data.length);
+        } else {
+          console.error('❌ API returned success: false', data.error);
+          setMessage(`❌ Failed to load quotes: ${data.error}`);
         }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ HTTP error:', response.status, errorData);
+        setMessage(`❌ HTTP ${response.status}: ${JSON.stringify(errorData)}`);
       }
     } catch (error) {
-      console.error('Error loading quotes:', error);
-      setMessage('❌ Gagal memuat data quotes');
+      console.error('❌ Network error loading quotes:', error);
+      setMessage(`❌ Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -93,6 +111,16 @@ const QuotesManagement = () => {
 
     setIsSubmitting(true);
     try {
+      console.log('➕ Adding new quote...');
+      console.log('🔑 Token available:', !!token);
+      console.log('📤 Quote data:', {
+        quoteText: newQuote.quote_text,
+        quoteAuthor: newQuote.quote_author,
+        quoteCategory: newQuote.quote_category,
+        quoteImage: newQuote.quote_image_url,
+        displayOrder: newQuote.display_order
+      });
+
       const response = await fetch(`${API_BASE_URL}/quotes`, {
         method: 'POST',
         headers: {
@@ -108,8 +136,12 @@ const QuotesManagement = () => {
         }),
       });
 
+      console.log('📊 Add quote response status:', response.status, response.statusText);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('📥 Add quote response data:', data);
+
         if (data.success) {
           setMessage('✅ Quote berhasil ditambahkan!');
           setNewQuote({
@@ -121,13 +153,19 @@ const QuotesManagement = () => {
           });
           setShowAddForm(false);
           loadQuotes();
+          console.log('✅ Quote added successfully!');
+        } else {
+          console.error('❌ API returned success: false', data.error);
+          setMessage(`❌ Failed to add quote: ${data.error}`);
         }
       } else {
-        throw new Error('Failed to add quote');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ HTTP error adding quote:', response.status, errorData);
+        setMessage(`❌ HTTP ${response.status}: ${JSON.stringify(errorData)}`);
       }
     } catch (error) {
-      console.error('Error adding quote:', error);
-      setMessage('❌ Gagal menambahkan quote');
+      console.error('❌ Network error adding quote:', error);
+      setMessage(`❌ Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
       setTimeout(() => setMessage(''), 5000);

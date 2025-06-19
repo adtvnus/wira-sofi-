@@ -177,6 +177,145 @@ class ApiService {
     }
   }
 
+  // Quotes APIs
+  async getQuotes() {
+    try {
+      const data = await this.apiCall('/quotes');
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async addQuote(quoteData: {
+    quoteText: string;
+    quoteAuthor: string;
+    quoteCategory?: string;
+    quoteImage?: string;
+    displayOrder?: number;
+  }) {
+    try {
+      const data = await this.apiCall('/quotes', {
+        method: 'POST',
+        body: JSON.stringify(quoteData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async updateQuote(quoteId: string, quoteData: any) {
+    try {
+      const data = await this.apiCall(`/quotes/${quoteId}`, {
+        method: 'PUT',
+        body: JSON.stringify(quoteData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async deleteQuote(quoteId: string) {
+    try {
+      const data = await this.apiCall(`/quotes/${quoteId}`, {
+        method: 'DELETE',
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  // Gallery APIs
+  async getGallery() {
+    try {
+      const data = await this.apiCall('/gallery');
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async addGalleryImage(formData: FormData) {
+    try {
+      const response = await fetch(`${this.baseUrl}/gallery`, {
+        method: 'POST',
+        headers: {
+          'Authorization': this.getToken ? `Bearer ${this.getToken()}` : '',
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`HTTP ${response.status}: ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async deleteGalleryImage(imageId: string) {
+    try {
+      const data = await this.apiCall(`/gallery/${imageId}`, {
+        method: 'DELETE',
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  // Story APIs
+  async getStory() {
+    try {
+      const data = await this.apiCall('/story');
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async addStoryItem(storyData: any) {
+    try {
+      const data = await this.apiCall('/story', {
+        method: 'POST',
+        body: JSON.stringify(storyData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async updateStoryItem(storyId: string, storyData: any) {
+    try {
+      const data = await this.apiCall(`/story/${storyId}`, {
+        method: 'PUT',
+        body: JSON.stringify(storyData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async deleteStoryItem(storyId: string) {
+    try {
+      const data = await this.apiCall(`/story/${storyId}`, {
+        method: 'DELETE',
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
   // Test connection
   async testConnection() {
     try {
