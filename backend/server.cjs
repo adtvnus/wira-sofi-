@@ -119,7 +119,18 @@ const dbConfig = {
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'wedding_invitation'
+  database: process.env.DB_NAME || 'wedding_invitation',
+  // Increase packet size limits for image uploads
+  acquireTimeout: 60000,
+  timeout: 60000,
+  reconnect: true,
+  // Set max_allowed_packet to 16MB
+  typeCast: function (field, next) {
+    if (field.type === 'TINY' && field.length === 1) {
+      return (field.string() === '1'); // 1 = true, 0 = false
+    }
+    return next();
+  }
 };
 
 async function getConnection() {
@@ -1792,9 +1803,9 @@ app.put('/api/thanks-settings', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if settings exist
+    // Check if settings exist for wedding_id = 1
     const [existingRows] = await connection.query(
-      'SELECT id FROM thanks_settings LIMIT 1'
+      'SELECT id FROM thanks_settings WHERE wedding_id = 1 LIMIT 1'
     );
 
     if (existingRows.length > 0) {
@@ -1814,12 +1825,11 @@ app.put('/api/thanks-settings', authenticateToken, async (req, res) => {
           social_media_facebook = ?,
           social_media_twitter = ?,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE wedding_id = 1
       `, [
         headerTitle, headerSubtitle, mainMessage, subMessage, coupleNames,
         blessingQuoteArabic, blessingQuoteTranslation, backgroundImage,
-        showSocialMedia, socialMediaInstagram, socialMediaFacebook, socialMediaTwitter,
-        existingRows[0].id
+        showSocialMedia, socialMediaInstagram, socialMediaFacebook, socialMediaTwitter
       ]);
 
       console.log('✅ Thanks settings updated successfully');
@@ -1827,11 +1837,11 @@ app.put('/api/thanks-settings', authenticateToken, async (req, res) => {
       // Insert new settings
       await connection.query(`
         INSERT INTO thanks_settings (
-          header_title, header_subtitle, main_message, sub_message, couple_names,
+          wedding_id, header_title, header_subtitle, main_message, sub_message, couple_names,
           blessing_quote_arabic, blessing_quote_translation, background_image,
           show_social_media, social_media_instagram, social_media_facebook, social_media_twitter,
           created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         headerTitle, headerSubtitle, mainMessage, subMessage, coupleNames,
         blessingQuoteArabic, blessingQuoteTranslation, backgroundImage,

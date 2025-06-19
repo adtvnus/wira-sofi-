@@ -206,12 +206,22 @@ const ThanksManagement: React.FC = () => {
           setTimeout(() => setMessage(''), 5000);
         }
       } else {
-        setMessage('❌ Gagal menyimpan pengaturan ke database');
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = 'Unknown error';
+        }
+        setMessage(`❌ Gagal menyimpan pengaturan ke database (Status: ${response.status})${errorText ? ': ' + errorText : ''}`);
         setTimeout(() => setMessage(''), 5000);
       }
     } catch (error) {
       console.error('Error saving thanks settings:', error);
-      setMessage('❌ Error: ' + error.message);
+      if (error instanceof Error) {
+        setMessage('❌ Error: ' + error.message);
+      } else {
+        setMessage('❌ Error: ' + String(error));
+      }
       setTimeout(() => setMessage(''), 5000);
     } finally {
       setIsLoading(false);

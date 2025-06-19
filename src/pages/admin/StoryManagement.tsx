@@ -235,13 +235,13 @@ const StoryManagement = () => {
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-700">Timeline Items</h2>
-                <button
+                {/* <button
                   type="button"
                   onClick={addNewTimelineItem}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                 >
                   + Tambah Timeline Item
-                </button>
+                </button> */}
               </div>
 
               <div className="space-y-6">

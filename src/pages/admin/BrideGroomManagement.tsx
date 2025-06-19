@@ -263,9 +263,9 @@ const BrideGroomManagement = () => {
     }
   };
 
-  // File validation function (same as Gallery Management)
+  // File validation function with smaller size limit
   const validateFile = (file: File): string | null => {
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 1 * 1024 * 1024; // 1MB (reduced from 5MB)
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
     if (!allowedTypes.includes(file.type)) {
@@ -273,19 +273,39 @@ const BrideGroomManagement = () => {
     }
 
     if (file.size > maxSize) {
-      return 'Ukuran file terlalu besar. Maksimal 5MB.';
+      return 'Ukuran file terlalu besar. Maksimal 1MB.';
     }
 
     return null;
   };
 
-  // Convert file to base64 (same as Gallery Management)
-  const fileToBase64 = (file: File): Promise<string> => {
+  // Compress and resize image
+  const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        // Calculate new dimensions
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        // Set canvas size
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
     });
   };
 
@@ -308,19 +328,19 @@ const BrideGroomManagement = () => {
         return;
       }
 
-      console.log('✅ File validation passed, converting to base64...');
+      console.log('✅ File validation passed, compressing image...');
 
-      // Convert to base64 for preview (NO API CALL)
-      const base64 = await fileToBase64(file);
+      // Compress image to reduce size before storing
+      const compressedBase64 = await compressImage(file, 600, 0.6); // 600px width, 60% quality
 
-      console.log('✅ Base64 conversion completed, updating form data...');
+      console.log('✅ Image compression completed, updating form data...');
 
-      // Update form data with new image (LOCAL STATE ONLY)
+      // Update form data with compressed image (LOCAL STATE ONLY)
       if (type === 'bride') {
-        handleInputChange('brideSettings', 'photo', base64);
+        handleInputChange('brideSettings', 'photo', compressedBase64);
         console.log('✅ Bride photo updated in form data');
       } else {
-        handleInputChange('groomSettings', 'photo', base64);
+        handleInputChange('groomSettings', 'photo', compressedBase64);
         console.log('✅ Groom photo updated in form data');
       }
 
@@ -651,7 +671,7 @@ const BrideGroomManagement = () => {
                           <div className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700 transition-colors">
                             Pilih Foto
                           </div>
-                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 1MB)</p>
                         </div>
                       )}
                     </label>
@@ -822,7 +842,7 @@ const BrideGroomManagement = () => {
                           <div className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
                             Pilih Foto
                           </div>
-                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 5MB)</p>
+                          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP (Max 1MB)</p>
                         </div>
                       )}
                     </label>

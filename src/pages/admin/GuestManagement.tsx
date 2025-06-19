@@ -39,7 +39,7 @@ const GuestManagement = () => {
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
   // Debug auth state (can be removed in production)
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     console.log('🔐 Auth state:', {
       isAuthenticated,
       hasToken: !!token,
@@ -145,7 +145,7 @@ const GuestManagement = () => {
     }
 
     // Log for debugging (can be removed in production)
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Adding new guest:', newGuestName.trim());
     }
 
@@ -193,7 +193,7 @@ const GuestManagement = () => {
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error adding guest:', error);
-      setMessage(`Gagal menambahkan tamu: ${error.message}`);
+      setMessage(`Gagal menambahkan tamu: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setTimeout(() => setMessage(''), 5000);
     } finally {
       setIsAdding(false);
